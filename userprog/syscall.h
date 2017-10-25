@@ -23,7 +23,8 @@ void seek_handler (int fd, unsigned position);
 unsigned tell_handler (int fd);
 void close_handler (int fd);
 void validate_pointer (const void *pointer);
-void validate_buffer (const void *buffer);
+void validate_buffer (const void *buffer, unsigned size);
+bool valid_fd (int fd);
 
 #endif /* userprog/syscall.h */
 

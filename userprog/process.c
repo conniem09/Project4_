@@ -101,12 +101,18 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  struct list_elem *e;     /* Start of first run. */
+  struct list_elem *e;    
 
   for (e = list_begin (&cur->held_locks); e != list_end (&cur->held_locks); 
        e = list_next (&cur->held_locks))
   {
     sema_up (list_entry (e, struct semaphore, held_elem));
+  }
+
+  for (e = list_begin (&cur->children); e != list_end (&cur->children); 
+       e = list_next (&cur->children))
+  {
+    (list_entry (e, struct thread, child_elem))->parent = NULL;
   }
 
   /* Destroy the current process's page directory and switch back

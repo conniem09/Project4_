@@ -11,10 +11,11 @@
 #include "threads/synch.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "devices/input.h"
+#include "filesys/off_t.h"
 
 #define MAX_ARGS 3
-#define STDOUT_FD 1
-#define CHUNKER_SIZE 200
+#define BLOCK_SIZE 200
 #define FD_START 2
 #define MAX_FD_COUNT 256
 
@@ -85,14 +86,14 @@ syscall_handler (struct intr_frame *f)
         break;
       case SYS_READ :
         get_arg (arguments, f->esp, 3);
-        validate_pointer ((const void *) arguments[1]);
+        validate_buffer ((const void *) arguments[1], arguments[2]);
         f-> eax = read_handler (((int) arguments[0]), (void *) arguments[1], 
                      ((unsigned) arguments[2]));
         break;
       case SYS_WRITE :
         //printf("Here SYS_WRITE !\n");
         get_arg (arguments, f->esp, 3);
-        validate_pointer ((const void *) arguments[1]);
+        validate_buffer ((const void *) arguments[1], arguments[2]);
         f->eax = write_handler (((int) arguments[0]), 
                                  ((const void *) arguments[1]), 
                                  ((unsigned) arguments[2]));
@@ -149,8 +150,8 @@ exit_handler (int status)
 {
   //printf("Here exit_handler !\n");
   thread_current ()->parent->child_exit_status = status;
-  printf("child exit status: %d\n", thread_current ()->parent->
-          child_exit_status);
+  /* printf("child exit status: %d\n", thread_current ()->parent->
+          child_exit_status); */
   printf ("%s: exit(%d)\n", thread_current ()->name, status);
   process_exit ();
   thread_exit ();
@@ -186,8 +187,9 @@ bool
 create_handler (const char *file, unsigned initial_size)
 {
   lock_acquire (&filesys_lock);
+  bool created = filesys_create (file, (off_t) initial_size);
   lock_release (&filesys_lock);
-  return false;
+  return created;
 }
 
 /* Deletes the file called FILE. Returns true if successful,
@@ -198,8 +200,9 @@ bool
 remove_handler (const char *file)
 {
   lock_acquire (&filesys_lock);
+  bool removed = filesys_remove (file);
   lock_release (&filesys_lock);
-  return false;
+  return removed;
 }
 
 /* Opens the file called file. Returns a file descriptor fd or
@@ -216,20 +219,22 @@ open_handler (const char *file)
         {
           open_files[fd_index] = filesys_open (file);
           if (open_files[fd_index] == NULL)
-            return -1;
+            break;
           file_associated_tids[fd_index] = thread_current ()->tid;
-          break;
+          lock_release (&filesys_lock);
+          return fd_index;
         }
     }
-
   lock_release (&filesys_lock);
-  return fd_index;
+  return -1;
 }
 
 /* Returns the size, in bytes, of the file open as fd. */
 int 
 filesize_handler (int fd) 
 {
+  ASSERT (valid_fd (fd));
+
   lock_acquire (&filesys_lock);
   int size = file_length (open_files[fd]);
   lock_release (&filesys_lock);
@@ -242,9 +247,26 @@ filesize_handler (int fd)
 int 
 read_handler (int fd, void *buffer, unsigned size)
 {
+  int size_read;
+  if (fd == STDIN_FILENO)
+    {
+      size_read = 0;
+      while ((unsigned) size_read < size) 
+        {
+          input_getc();
+          size_read++;
+        }
+      return size_read;
+    }
+
+  ASSERT (valid_fd (fd));
+  if ((open_files[fd] == NULL))
+    return -1;
+
   lock_acquire (&filesys_lock);
+  size_read = file_read (open_files[fd], buffer, (off_t) size);
   lock_release (&filesys_lock);
-  return -1;
+  return size_read;
 }
 
 /* Write size bytes from buffer to the open file fd. Returns
@@ -255,24 +277,30 @@ int
 write_handler (int fd, const void *buffer, unsigned size)
 {
   //printf("Here write_handler !\n");
-  if (fd == STDOUT_FD) /* Is there already a macro defined for STDOUT? */
+  if (fd == STDOUT_FILENO) /* Is there already a macro defined for STDOUT? */
     {
-      int chunkers = 0;
+      int blocks = 0;
       int remaining = size;
-      while (remaining >= CHUNKER_SIZE)
+      while (remaining >= BLOCK_SIZE)
       {
-        putbuf (buffer + (chunkers * CHUNKER_SIZE), CHUNKER_SIZE);
-        remaining -= CHUNKER_SIZE;
-        chunkers++;
+        putbuf (buffer + (blocks * BLOCK_SIZE), BLOCK_SIZE);
+        remaining -= BLOCK_SIZE;
+        blocks++;
       }
-      putbuf (buffer + (chunkers * CHUNKER_SIZE), remaining);
+      putbuf (buffer + (blocks * BLOCK_SIZE), remaining);
       //printf("write_handler returned size: %u\n", size);
       return size;
     }
-  lock_acquire (&filesys_lock);
 
+  ASSERT (valid_fd (fd));
+  if ((open_files[fd] == NULL))
+    return -1;
+
+  lock_acquire (&filesys_lock);
+  struct file *target = open_files[fd];
+  off_t bytes_written = file_write (target, buffer, (off_t) size);
   lock_release (&filesys_lock);
-  return -1;
+  return bytes_written;
 }
 
 /* Changes the next byte to be read or written in open file fd
@@ -280,6 +308,8 @@ write_handler (int fd, const void *buffer, unsigned size)
 void 
 seek_handler (int fd, unsigned position)
 {
+  ASSERT (valid_fd (fd));
+
   lock_acquire (&filesys_lock);
   file_seek (open_files[fd], ((int32_t) position));
   lock_release (&filesys_lock);
@@ -290,8 +320,10 @@ seek_handler (int fd, unsigned position)
 unsigned 
 tell_handler (int fd)
 {
+  ASSERT (valid_fd (fd));
+
   lock_acquire (&filesys_lock);
-  int32_t pos = file_tell (open_files[fd]);
+  off_t pos = file_tell (open_files[fd]);
   lock_release (&filesys_lock);
   return ((unsigned) pos);
 }
@@ -300,6 +332,8 @@ tell_handler (int fd)
 void 
 close_handler (int fd)
 {
+  ASSERT (valid_fd (fd));
+
   lock_acquire (&filesys_lock);
   lock_release (&filesys_lock);
 } 
@@ -318,8 +352,25 @@ validate_pointer (const void *pointer)
     }
 }
 
+/* Checks if a buffer passed in is valid. 
+   If not, the running process is terminated. */
 void
-validate_buffer (const void *buffer) 
+validate_buffer (const void *buffer, unsigned size) 
 {
+  unsigned i;
+  unsigned pointer_size = sizeof(const void *);
 
+  for (i = 0; i < ((size / pointer_size) + (size % pointer_size)); i++)
+    {
+      validate_pointer ((const void *) (((int *) buffer) + i));
+    }
+}
+
+/* Checks if fd is in range of array. If not, return false. */
+bool
+valid_fd (int fd)
+{
+  if ((fd < FD_START) || (fd > MAX_FD_COUNT))
+    return false;
+  return true;
 }
