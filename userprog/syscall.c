@@ -149,11 +149,19 @@ void
 exit_handler (int status)
 {
   //printf("Here exit_handler !\n");
-  thread_current ()->parent->child_exit_status = status;
+  thread_current ()->exit_status = status;
   /* printf("child exit status: %d\n", thread_current ()->parent->
           child_exit_status); */
   printf ("%s: exit(%d)\n", thread_current ()->name, status);
   process_exit ();
+  /*wait here*/
+  if (thread_current ()->parent != NULL)
+    {
+      thread_current ()->awaiting_reapage = true;
+      sema_up(&(thread_current ()->parent->parent_wait_sema));
+      sema_down(&(thread_current ()->child_exit_sema));
+    }
+  /*give status now*/
   thread_exit ();
 }
 
@@ -178,7 +186,7 @@ exec_handler (const char *cmd_line)
 int 
 wait_handler (pid_t pid)
 {
-  return -1;
+  process_wait(pid);
 }
 
 /* Creates a new file called FILE initially INITIAL_SIZE bytes
@@ -277,7 +285,7 @@ int
 write_handler (int fd, const void *buffer, unsigned size)
 {
   //printf("Here write_handler !\n");
-  if (fd == STDOUT_FILENO) /* Is there already a macro defined for STDOUT? */
+  if (fd == STDOUT_FILENO) 
     {
       int blocks = 0;
       int remaining = size;
@@ -335,6 +343,7 @@ close_handler (int fd)
   ASSERT (valid_fd (fd));
 
   lock_acquire (&filesys_lock);
+  file_close (open_files[fd]);
   lock_release (&filesys_lock);
 } 
 
@@ -347,8 +356,7 @@ validate_pointer (const void *pointer)
   if (pointer == NULL || is_kernel_vaddr (pointer) || 
       pagedir_get_page (thread_current ()->pagedir, pointer) == NULL)
     {
-      /* call thread_exit() or call exit()?  */
-      thread_exit ();
+      exit_handler (-1);
     }
 }
 
@@ -358,9 +366,13 @@ void
 validate_buffer (const void *buffer, unsigned size) 
 {
   unsigned i;
-  unsigned pointer_size = sizeof(const void *);
+  unsigned pointer_size = sizeof (const void *);
+  unsigned num_pointers = size / pointer_size;
 
-  for (i = 0; i < ((size / pointer_size) + (size % pointer_size)); i++)
+  if (size % pointer_size != 0)
+    num_pointers++;
+
+  for (i = 0; i < num_pointers; i++)
     {
       validate_pointer ((const void *) (((int *) buffer) + i));
     }

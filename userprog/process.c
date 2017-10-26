@@ -37,7 +37,7 @@ process_execute (const char *file_name)
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
-    return TID_ERROR;
+    return TID_ERROR; 
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
@@ -78,7 +78,7 @@ start_process (void *file_name_)
   NOT_REACHED ();
 }
 
-/* Waits for thread TID to die and returns its exit status.  If
+/* Waits for thread TID to DIE and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
    child of the calling process, or if process_wait() has already
@@ -88,32 +88,64 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  while (1);
-  //return -1;
+
+  struct thread *cur = thread_current ();
+  struct thread *target;
+  struct list_elem *e;  
+  bool valid_tid = false;
+  int exit_status;
+
+  // Validate TID
+  for (e = list_begin (&cur->children); e != list_end (&cur->children); 
+       e = list_next (&cur->children))
+    {
+      if (list_entry(e, struct thread, child_elem)->tid == child_tid)
+        {
+          valid_tid = true;
+          target = list_entry(e, struct thread, child_elem);
+          break;
+        }
+    }
+  if (!valid_tid)
+    return -1;
+
+  // Block until child awakens us
+  sema_down(&cur->parent_wait_sema);
+
+  exit_status = target->exit_status;
+
+  // Die, child
+  sema_up(&target->child_exit_sema);
+  list_remove(&e);
+
+  return exit_status;
+
 }
 
 /* Free the current process's resources. */
 void
 process_exit (void)
 {
+
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
   struct list_elem *e;    
 
   for (e = list_begin (&cur->held_locks); e != list_end (&cur->held_locks); 
        e = list_next (&cur->held_locks))
-  {
-    sema_up (list_entry (e, struct semaphore, held_elem));
-  }
+    {
+      sema_up (list_entry (e, struct semaphore, held_elem));
+    }
 
   for (e = list_begin (&cur->children); e != list_end (&cur->children); 
        e = list_next (&cur->children))
-  {
-    (list_entry (e, struct thread, child_elem))->parent = NULL;
-  }
+    {
+      (list_entry (e, struct thread, child_elem))->parent = NULL;
+      if ((list_entry (e, struct thread, child_elem))->awaiting_reapage)
+        sema_up(&(list_entry (e, struct thread, child_elem))->child_exit_sema);
+    }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -131,6 +163,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
 }
 
 /* Sets up the CPU for running user code in the current
@@ -472,6 +505,7 @@ setup_stack (void **esp, const char *cmdline)
   int arg_iterator;
   uint32_t i;
   int before_word_align;
+  int arg_bytes_read;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
@@ -483,12 +517,19 @@ setup_stack (void **esp, const char *cmdline)
 
           strlcpy (buf, cmdline, sizeof (local_copy));   /* Make local copy */
           
+          arg_bytes_read = 0;
          /* Parse arguments and store in parsed array. */
           while ((token = strtok_r (buf, " ", &buf))) 
             {
-              parsed[argc] = token;
-              printf ("arg %d: %s\n", argc, parsed[argc]);
-              argc++;
+              if (arg_bytes_read + strlen(token) <= PGSIZE)
+                {
+                  parsed[argc] = token;
+                  printf ("arg %d: %s\n", argc, parsed[argc]);
+                  argc++;
+                  arg_bytes_read += strlen(token);
+                }
+              else
+                break;
             }
           printf("argc %d\n", argc);
           
@@ -516,7 +557,6 @@ setup_stack (void **esp, const char *cmdline)
           
           /* Null "sentinel" */
           *esp -= sizeof (char *);
-          // memcpy(*esp, &null_pointer, sizeof(char*));
         
           /* Push pointers to argument data onto stacki */          
           for (arg_iterator = argc - 1; arg_iterator >= 0; arg_iterator--)

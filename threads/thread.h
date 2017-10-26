@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -103,13 +104,17 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
-    struct list held_locks;
+    struct list held_locks;             /* List of held locks */
 
     struct list children;               /* Child threads */
     struct list_elem child_elem;        /* So that this thread can be stored 
                                              in another's child list*/
     struct thread *parent;              /* Point to the parenting thread */
-    int child_exit_status;              /* Exit of the last child */
+    int exit_status;                    /* My exit status */
+    bool awaiting_reapage;              /* I AM WAITING TO DIE */        
+
+    struct semaphore parent_wait_sema;       /* LOCK for parent */
+    struct semaphore child_exit_sema;        /* Lock for chilld */  
 
   };
 

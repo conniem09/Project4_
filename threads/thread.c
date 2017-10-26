@@ -293,7 +293,6 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  thread_current ()->parent->child_exit_status = THREAD_DYING;
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -466,9 +465,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->child_exit_status = -1;
+  t->exit_status = -1;
+  t->awaiting_reapage = false;
   list_init (&t->held_locks);
   list_init (&t->children);
+  sema_init(&t->child_exit_sema, 0);
+  sema_init(&t->parent_wait_sema, 0);
+  list_push_back(&t->parent->children, &t->child_elem);
 
   old_level = intr_disable();
   list_push_back (&all_list, &t->allelem);
