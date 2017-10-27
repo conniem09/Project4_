@@ -166,6 +166,11 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
 {
+  /* REMOVE THIS FUCKING SHIT */
+  printf("thread_create()  beginning HERE!\n");
+  enum intr_level old_level;
+  old_level = intr_disable ();
+
   struct thread *t;
   struct kernel_thread_frame *kf;
   struct switch_entry_frame *ef;
@@ -181,8 +186,13 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
-  tid = t->tid = allocate_tid ();
-  t->parent = thread_current (); 
+  t->parent = thread_current ();
+  if (t->parent != NULL)
+    list_push_back (&t->parent->children, &t->child_elem);
+  
+  intr_set_level(old_level);
+
+  tid = t->tid = allocate_tid ();   
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -199,6 +209,8 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  
+  
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -465,13 +477,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->exit_status = -1;
-  t->awaiting_reapage = false;
+
+  t->child_exit_status = -1;
   list_init (&t->held_locks);
   list_init (&t->children);
-  sema_init(&t->child_exit_sema, 0);
-  sema_init(&t->parent_wait_sema, 0);
-  list_push_back(&t->parent->children, &t->child_elem);
+  sema_init (&t->child_exit_sema, 0);
+  sema_init (&t->parent_wait_sema, 0);
 
   old_level = intr_disable();
   list_push_back (&all_list, &t->allelem);

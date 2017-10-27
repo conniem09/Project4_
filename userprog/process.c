@@ -90,62 +90,68 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-
   struct thread *cur = thread_current ();
-  struct thread *target;
+  struct thread *child;
   struct list_elem *e;  
   bool valid_tid = false;
-  int exit_status;
 
+  printf ("Process_wait beginning HERE!\n");
   // Validate TID
+  printf ("children list size:  %d\n", list_size (&cur->children));
   for (e = list_begin (&cur->children); e != list_end (&cur->children); 
-       e = list_next (&cur->children))
+       e = list_next (e))
     {
-      if (list_entry(e, struct thread, child_elem)->tid == child_tid)
+      if (list_entry (e, struct thread, child_elem)->tid == child_tid)
         {
+          printf("process_wait(): found child here.\n");
           valid_tid = true;
-          target = list_entry(e, struct thread, child_elem);
+          child = list_entry (e, struct thread, child_elem);
           break;
         }
+        printf("in loop???\n");
     }
   if (!valid_tid)
-    return -1;
-
-  // Block until child awakens us
-  sema_down(&cur->parent_wait_sema);
-
-  exit_status = target->exit_status;
+    {
+      printf("process_wait(): not valid tid.\n");
+      return -1;
+    }
+  
+  printf ("Process_wait before sema HERE!\n");
 
   // Die, child
-  sema_up(&target->child_exit_sema);
-  list_remove(&e);
+  sema_up (&child->child_exit_sema);
+  // Block until child awakens us
+  sema_down (&cur->parent_wait_sema);
+  printf ("Process_wait after sema HERE!\n\n");
 
-  return exit_status;
-
+  return cur->child_exit_status;
 }
 
 /* Free the current process's resources. */
 void
 process_exit (void)
 {
-
   struct thread *cur = thread_current ();
   uint32_t *pd;
   struct list_elem *e;    
 
+
+  //printf ("held_lock list size:  %d\n", list_size (&cur->held_locks));
+
   for (e = list_begin (&cur->held_locks); e != list_end (&cur->held_locks); 
-       e = list_next (&cur->held_locks))
+       e = list_next (e))
     {
       sema_up (list_entry (e, struct semaphore, held_elem));
     }
 
   for (e = list_begin (&cur->children); e != list_end (&cur->children); 
-       e = list_next (&cur->children))
+       e = list_next (e))
     {
       (list_entry (e, struct thread, child_elem))->parent = NULL;
-      if ((list_entry (e, struct thread, child_elem))->awaiting_reapage)
-        sema_up(&(list_entry (e, struct thread, child_elem))->child_exit_sema);
+      sema_up (&list_entry (e, struct thread, child_elem)->child_exit_sema);
     }
+
+  //printf ("in process_exit() after list junk\n");
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -267,14 +273,15 @@ load (const char *cmdline, void (**eip) (void), void **esp)
 
   /* Need to "parse out the executable from the rest of the command line 
     so you can load it from the filesys" */
-  char local_copy[14];
+  char local_copy[15];
   char *local_pointer = local_copy;
   strlcpy (local_pointer, cmdline, sizeof(local_copy));
-  //printf("local_copy in load(): %s\n", local_copy);
 
   char *token = strtok_r (local_pointer, " ", &local_pointer);
   const char *file_name = token;
-  //printf("file_name in load(): %s\n", file_name);
+  printf ("file_name: %s\n", file_name);
+  char *buff = t->execu_name;
+  strlcpy (t->execu_name, file_name, strlen(file_name) + 1);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -493,14 +500,13 @@ setup_stack (void **esp, const char *cmdline)
   uint8_t *kpage;
   bool success = false;
 
-  static char local_copy[50];     /* Local copy of command line. */
+  static char local_copy[128];     /* Local copy of command line. */
   char *buf = local_copy;         /* Pointer to local copy. */
-  static char *parsed[50];        /* Parsed array. */
-  int *arg_addresses[50];
+  static char *parsed[65];        /* Parsed array. */
+  int *arg_addresses[65];
   char *token = NULL;
   int argc = 0;
   size_t arg_size = 0;            /* Size of each argument. */
-  // char word_aligner = 0;
   char null_pointer = 0;
   int arg_iterator;
   uint32_t i;
@@ -518,20 +524,20 @@ setup_stack (void **esp, const char *cmdline)
           strlcpy (buf, cmdline, sizeof (local_copy));   /* Make local copy */
           
           arg_bytes_read = 0;
-         /* Parse arguments and store in parsed array. */
+          /* Parse arguments and store in parsed array. */
           while ((token = strtok_r (buf, " ", &buf))) 
             {
               if (arg_bytes_read + strlen(token) <= PGSIZE)
                 {
                   parsed[argc] = token;
-                  printf ("arg %d: %s\n", argc, parsed[argc]);
+                  // printf ("arg %d: %s\n", argc, parsed[argc]);
                   argc++;
                   arg_bytes_read += strlen(token);
                 }
               else
                 break;
             }
-          printf("argc %d\n", argc);
+          // printf("argc %d\n", argc);
           
           /* Push arguments onto stack */
           for (arg_iterator = argc - 1; arg_iterator >= 0; arg_iterator--)
@@ -540,8 +546,8 @@ setup_stack (void **esp, const char *cmdline)
               *esp -= arg_size;
               memcpy (*esp, parsed[arg_iterator], arg_size);
               arg_addresses[arg_iterator] = *esp;
-              printf ("arg_address[%d]: %p\n", arg_iterator, (void *) 
-                                        arg_addresses[arg_iterator]);
+              // printf ("arg_address[%d]: %p\n", arg_iterator, (void *) 
+              //                          arg_addresses[arg_iterator]);
             }
 
           /* Word align between array data and pointers to them */
@@ -553,7 +559,7 @@ setup_stack (void **esp, const char *cmdline)
                   *esp -= 1; 
                 }
             }
-          printf ("esp after word align: %p\n", ((void *) *esp));
+          // printf ("esp after word align: %p\n", ((void *) *esp));
           
           /* Null "sentinel" */
           *esp -= sizeof (char *);
@@ -577,7 +583,7 @@ setup_stack (void **esp, const char *cmdline)
           /* return address */
           *esp -= sizeof (void*);
           memcpy (*esp, &null_pointer, sizeof (void *));
-          printf ("Final esp: %p\n\n", ((void *) *esp));
+          // printf ("Final esp: %p\n\n", ((void *) *esp));
 
           hex_dump (*esp, *esp, PHYS_BASE-*esp, 1);
           printf("\n");

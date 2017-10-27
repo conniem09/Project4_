@@ -106,16 +106,15 @@ struct thread
 
     struct list held_locks;             /* List of held locks */
 
-    struct list children;               /* Child threads */
-    struct list_elem child_elem;        /* So that this thread can be stored 
-                                             in another's child list*/
-    struct thread *parent;              /* Point to the parenting thread */
-    int exit_status;                    /* My exit status */
-    bool awaiting_reapage;              /* I AM WAITING TO DIE */        
+    struct list children;               /* List of child threads */
+    struct list_elem child_elem;        /* List elem for children list */
+    struct thread *parent;              /* Pointer to the parent thread */
+    int child_exit_status;              /* Child's exit status */      
 
-    struct semaphore parent_wait_sema;       /* LOCK for parent */
-    struct semaphore child_exit_sema;        /* Lock for chilld */  
+    struct semaphore parent_wait_sema;       /* Semaphore for parent */
+    struct semaphore child_exit_sema;        /* Semaphore for chilld */  
 
+    char execu_name[15];                /* Executable name */
   };
 
 /* If false (default), use round-robin scheduler.

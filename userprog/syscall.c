@@ -13,6 +13,7 @@
 #include "filesys/file.h"
 #include "devices/input.h"
 #include "filesys/off_t.h"
+#include "lib/kernel/list.h"
 
 #define MAX_ARGS 3
 #define BLOCK_SIZE 200
@@ -121,9 +122,11 @@ get_arg (int arguments[], void *esp, int num_arg)
   int *local_esp = (int *) esp;
   int i; 
 
+  validate_pointer ((const void*) local_esp);
   for (i = 0; i < num_arg; i++)
    {
      local_esp++;
+     validate_pointer ((const void*) local_esp);
      arguments[i] = *local_esp;
    }
 
@@ -148,20 +151,23 @@ halt_handler (void)
 void 
 exit_handler (int status)
 {
-  //printf("Here exit_handler !\n");
-  thread_current ()->exit_status = status;
-  /* printf("child exit status: %d\n", thread_current ()->parent->
-          child_exit_status); */
-  printf ("%s: exit(%d)\n", thread_current ()->name, status);
+  struct thread *cur = thread_current ();
+  
+  //cur->exit_status = status;
+
+  printf ("%s: exit(%d)\n", cur->execu_name, status);
   process_exit ();
-  /*wait here*/
-  if (thread_current ()->parent != NULL)
+  
+  printf("PARENT DURING EXIT: %p\n", cur->parent);
+  if (cur->parent != NULL)
     {
-      thread_current ()->awaiting_reapage = true;
-      sema_up(&(thread_current ()->parent->parent_wait_sema));
-      sema_down(&(thread_current ()->child_exit_sema));
+      printf ("Non-null parent here.\n");
+      sema_down (&cur->child_exit_sema);
+      cur->parent->child_exit_status = status;
+      list_remove (&cur->child_elem);
+      sema_up (&cur->parent->parent_wait_sema);
     }
-  /*give status now*/
+  
   thread_exit ();
 }
 
@@ -186,7 +192,8 @@ exec_handler (const char *cmd_line)
 int 
 wait_handler (pid_t pid)
 {
-  process_wait(pid);
+  printf ("Wait_handler here!");
+  process_wait (pid);
 }
 
 /* Creates a new file called FILE initially INITIAL_SIZE bytes
@@ -353,6 +360,7 @@ close_handler (int fd)
 void 
 validate_pointer (const void *pointer)
 {
+  printf("CUrently vadilating pointer %p \n", pointer);
   if (pointer == NULL || is_kernel_vaddr (pointer) || 
       pagedir_get_page (thread_current ()->pagedir, pointer) == NULL)
     {
