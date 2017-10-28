@@ -167,7 +167,7 @@ thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
 {
   /* REMOVE THIS FUCKING SHIT */
-  printf("thread_create()  beginning HERE!\n");
+  //printf("thread_create()  beginning HERE!\n");
   enum intr_level old_level;
   old_level = intr_disable ();
 
@@ -208,8 +208,6 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
-
-  
   
   /* Add to run queue. */
   thread_unblock (t);

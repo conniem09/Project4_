@@ -95,34 +95,33 @@ process_wait (tid_t child_tid)
   struct list_elem *e;  
   bool valid_tid = false;
 
-  printf ("Process_wait beginning HERE!\n");
+  //printf ("Process_wait beginning HERE!\n");
   // Validate TID
-  printf ("children list size:  %d\n", list_size (&cur->children));
+  //printf ("children list size:  %d\n", list_size (&cur->children));
   for (e = list_begin (&cur->children); e != list_end (&cur->children); 
        e = list_next (e))
     {
       if (list_entry (e, struct thread, child_elem)->tid == child_tid)
         {
-          printf("process_wait(): found child here.\n");
+          //printf("process_wait(): found child here.\n");
           valid_tid = true;
           child = list_entry (e, struct thread, child_elem);
           break;
         }
-        printf("in loop???\n");
     }
   if (!valid_tid)
     {
-      printf("process_wait(): not valid tid.\n");
+      //printf("process_wait(): not valid tid.\n");
       return -1;
     }
   
-  printf ("Process_wait before sema HERE!\n");
+  //printf ("Process_wait before sema HERE!\n");
 
   // Die, child
   sema_up (&child->child_exit_sema);
   // Block until child awakens us
   sema_down (&cur->parent_wait_sema);
-  printf ("Process_wait after sema HERE!\n\n");
+  //printf ("Process_wait after sema HERE!\n\n");
 
   return cur->child_exit_status;
 }
@@ -279,8 +278,6 @@ load (const char *cmdline, void (**eip) (void), void **esp)
 
   char *token = strtok_r (local_pointer, " ", &local_pointer);
   const char *file_name = token;
-  printf ("file_name: %s\n", file_name);
-  char *buff = t->execu_name;
   strlcpy (t->execu_name, file_name, strlen(file_name) + 1);
 
   /* Allocate and activate page directory. */
@@ -510,7 +507,7 @@ setup_stack (void **esp, const char *cmdline)
   char null_pointer = 0;
   int arg_iterator;
   uint32_t i;
-  int before_word_align;
+  uint32_t before_word_align;
   int arg_bytes_read;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
@@ -585,8 +582,8 @@ setup_stack (void **esp, const char *cmdline)
           memcpy (*esp, &null_pointer, sizeof (void *));
           // printf ("Final esp: %p\n\n", ((void *) *esp));
 
-          hex_dump (*esp, *esp, PHYS_BASE-*esp, 1);
-          printf("\n");
+          //hex_dump (*esp, *esp, PHYS_BASE-*esp, 1);
+          //printf("\n");
         }
       else
         {

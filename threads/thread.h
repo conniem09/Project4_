@@ -25,6 +25,9 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* Maximum number of open files per process. */
+#define MAX_FD_COUNT 128
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -104,17 +107,18 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
+    char execu_name[15];                 /* Executable name */
+    
     struct list held_locks;             /* List of held locks */
-
     struct list children;               /* List of child threads */
     struct list_elem child_elem;        /* List elem for children list */
     struct thread *parent;              /* Pointer to the parent thread */
-    int child_exit_status;              /* Child's exit status */      
+    int child_exit_status;              /* Child's exit status */                      
 
-    struct semaphore parent_wait_sema;       /* Semaphore for parent */
-    struct semaphore child_exit_sema;        /* Semaphore for chilld */  
+    struct semaphore parent_wait_sema;      /* Semaphore for parent */
+    struct semaphore child_exit_sema;       /* Semaphore for chilld */  
 
-    char execu_name[15];                /* Executable name */
+    struct file *open_files[MAX_FD_COUNT];  /* Index through fd to get file. */
   };
 
 /* If false (default), use round-robin scheduler.

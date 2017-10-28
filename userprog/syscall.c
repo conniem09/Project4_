@@ -2,50 +2,46 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <syscall-nr.h>
+#include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "pagedir.h"
 #include "threads/vaddr.h"
-#include "devices/shutdown.h"
-#include "userprog/process.h"
 #include "threads/synch.h"
+#include "pagedir.h"
+#include "devices/shutdown.h"
+#include "devices/input.h"
+#include "userprog/process.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
-#include "devices/input.h"
 #include "filesys/off_t.h"
 #include "lib/kernel/list.h"
+
 
 #define MAX_ARGS 3
 #define BLOCK_SIZE 200
 #define FD_START 2
-#define MAX_FD_COUNT 256
+#define CODE_SEG_START  0x08048000
 
 /* Global lock for filesys. */
 static struct lock filesys_lock;
-
-/* Index through fd to get pointer to associated file struct. */         
-struct file *open_files[MAX_FD_COUNT];
-
-/* Index through fd to get associated tid. */
-tid_t file_associated_tids[MAX_FD_COUNT];
-int fd_count = FD_START;
 
 static void syscall_handler (struct intr_frame *);
 
 void
 syscall_init (void) 
 {
-  int i;
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&filesys_lock);
-  for (i = 0; i < MAX_FD_COUNT; i++)
-    file_associated_tids[i] = -1;
 }
 
 static void
 syscall_handler (struct intr_frame *f) 
 {
+  //printf("esp at top of syscall_handler(): %p\n", (int *) f->esp);
+  //printf ("syscall number: %d\n", *((int *) f->esp));
+  validate_pointer ((const void *) f->esp);
   int arguments[MAX_ARGS];
+
   switch (*((int *) f->esp)) 
     {
       case SYS_HALT :
@@ -122,21 +118,13 @@ get_arg (int arguments[], void *esp, int num_arg)
   int *local_esp = (int *) esp;
   int i; 
 
-  validate_pointer ((const void*) local_esp);
   for (i = 0; i < num_arg; i++)
    {
      local_esp++;
+     //printf("checking esp for arg %d:\t", i);
      validate_pointer ((const void*) local_esp);
      arguments[i] = *local_esp;
    }
-
-   /* Write debugging printf statements */
-  /* if (num_arg == 3) 
-   {
-     printf("fd: %d\n", (int) arguments[0]);
-     printf("buffer: %p\n", arguments[1]);
-     printf("size: %u\n", (unsigned) arguments[2]);
-   }*/
 }
 
 /* Terminates Pintos. */
@@ -158,15 +146,21 @@ exit_handler (int status)
   printf ("%s: exit(%d)\n", cur->execu_name, status);
   process_exit ();
   
-  printf("PARENT DURING EXIT: %p\n", cur->parent);
+  //printf("PARENT DURING EXIT: %p\n", cur->parent);
   if (cur->parent != NULL)
     {
-      printf ("Non-null parent here.\n");
+      //printf ("Non-null parent here.\n");
       sema_down (&cur->child_exit_sema);
       cur->parent->child_exit_status = status;
       list_remove (&cur->child_elem);
       sema_up (&cur->parent->parent_wait_sema);
     }
+
+  lock_acquire(&filesys_lock);
+  struct file *my_ex = filesys_open(cur->execu_name);
+  file_allow_write(my_ex);
+  file_close(my_ex);
+  lock_release(&filesys_lock);
   
   thread_exit ();
 }
@@ -177,9 +171,36 @@ exit_handler (int status)
 pid_t 
 exec_handler (const char *cmd_line)
 {
+
+  // Check that file exists
+  char local_copy[15];
+  char *local_pointer = local_copy;
+  strlcpy (local_pointer, cmd_line, sizeof(local_copy));
+  char *token = strtok_r (local_pointer, " ", &local_pointer);
+  const char *file_name = token;
+
   lock_acquire (&filesys_lock);
+  struct file *file = filesys_open(file_name);
+  if (file == NULL)
+    {
+      file_close(file);
+      lock_release (&filesys_lock);
+      return -1;
+    }
   lock_release (&filesys_lock);
-  return -1;
+  file_close(file);
+
+  pid_t pid = process_execute (cmd_line);
+
+  if (pid == TID_ERROR)
+    return -1;
+
+  lock_acquire(&filesys_lock);
+  file_deny_write(file);
+  lock_release(&filesys_lock);
+
+  return pid;
+
 }
 
 /* Waits for a child process PID and returns child's exit
@@ -192,7 +213,6 @@ exec_handler (const char *cmd_line)
 int 
 wait_handler (pid_t pid)
 {
-  printf ("Wait_handler here!");
   process_wait (pid);
 }
 
@@ -226,39 +246,59 @@ remove_handler (const char *file)
 int 
 open_handler (const char *file)
 {
-  lock_acquire (&filesys_lock);
   int fd_index;
+  struct thread *cur = thread_current ();
+
+  lock_acquire (&filesys_lock);
+  
   for (fd_index = FD_START; fd_index < MAX_FD_COUNT; fd_index++)
     {
-      if (file_associated_tids[fd_index] == -1)
+      if (cur->open_files[fd_index] == NULL)
         {
-          open_files[fd_index] = filesys_open (file);
-          if (open_files[fd_index] == NULL)
-            break;
-          file_associated_tids[fd_index] = thread_current ()->tid;
-          lock_release (&filesys_lock);
-          return fd_index;
+          cur->open_files[fd_index] = filesys_open (file);
+          if (cur->open_files[fd_index] != NULL)
+            {
+              cur->open_files[fd_index] = filesys_open (file);
+              lock_release (&filesys_lock);
+              return fd_index;
+            }
         }
     }
+
+  // int fd_index;
+  // for (fd_index = FD_START; fd_index < MAX_FD_COUNT; fd_index++)
+  //   {
+  //     if (file_associated_tids[fd_index] == -1)
+  //       {
+  //         open_files[fd_index] = filesys_open (file);
+  //         if (open_files[fd_index] == NULL)
+  //           break;
+  //         file_associated_tids[fd_index] = thread_current ()->tid;
+  //         lock_release (&filesys_lock);
+  //         return fd_index;
+  //       }
+  //   }
   lock_release (&filesys_lock);
   return -1;
 }
 
-/* Returns the size, in bytes, of the file open as fd. */
+/* Returns the size, in bytes, of the file open as fd. 
+   If invalid id, returns -1. */
 int 
 filesize_handler (int fd) 
 {
-  ASSERT (valid_fd (fd));
+  if (!valid_fd (fd))
+    return -1;
 
   lock_acquire (&filesys_lock);
-  int size = file_length (open_files[fd]);
+  int size = file_length (thread_current ()->open_files[fd]);
   lock_release (&filesys_lock);
   return size;
 }
 
 /* Reads size bytes from the file open as fd into buffer. 
    Returns the number of bytes actually read (0 at end of file),
-   or -1 if the file could not be read. */
+   or -1 if the file could not be read or fd is invalid. */
 int 
 read_handler (int fd, void *buffer, unsigned size)
 {
@@ -274,12 +314,15 @@ read_handler (int fd, void *buffer, unsigned size)
       return size_read;
     }
 
-  ASSERT (valid_fd (fd));
-  if ((open_files[fd] == NULL))
+  if (!valid_fd (fd))
+    return -1;
+
+  struct file *file = thread_current ()->open_files[fd]
+  if (file == NULL)
     return -1;
 
   lock_acquire (&filesys_lock);
-  size_read = file_read (open_files[fd], buffer, (off_t) size);
+  size_read = file_read (file, buffer, (off_t) size);
   lock_release (&filesys_lock);
   return size_read;
 }
@@ -287,7 +330,9 @@ read_handler (int fd, void *buffer, unsigned size)
 /* Write size bytes from buffer to the open file fd. Returns
    the number of bytes actually written. 
 
-   fd 1 writes to the console. */
+   fd 1 writes to the console. 
+
+   If invalid id, returns -1. */
 int 
 write_handler (int fd, const void *buffer, unsigned size)
 {
@@ -303,17 +348,18 @@ write_handler (int fd, const void *buffer, unsigned size)
         blocks++;
       }
       putbuf (buffer + (blocks * BLOCK_SIZE), remaining);
-      //printf("write_handler returned size: %u\n", size);
       return size;
     }
 
-  ASSERT (valid_fd (fd));
-  if ((open_files[fd] == NULL))
+  if (!valid_fd (fd))
+    return -1;
+
+  struct file *file = thread_current ()->open_files[fd];
+  if (file == NULL)
     return -1;
 
   lock_acquire (&filesys_lock);
-  struct file *target = open_files[fd];
-  off_t bytes_written = file_write (target, buffer, (off_t) size);
+  off_t bytes_written = file_write (file, buffer, (off_t) size);
   lock_release (&filesys_lock);
   return bytes_written;
 }
@@ -323,10 +369,11 @@ write_handler (int fd, const void *buffer, unsigned size)
 void 
 seek_handler (int fd, unsigned position)
 {
-  ASSERT (valid_fd (fd));
+  if (!valid_fd (fd))
+    return;
 
   lock_acquire (&filesys_lock);
-  file_seek (open_files[fd], ((int32_t) position));
+  file_seek (thread_current ()->open_files[fd], ((int32_t) position));
   lock_release (&filesys_lock);
 }
 
@@ -335,10 +382,11 @@ seek_handler (int fd, unsigned position)
 unsigned 
 tell_handler (int fd)
 {
-  ASSERT (valid_fd (fd));
+  if (!valid_fd (fd))
+    exit_handler (-1);
 
   lock_acquire (&filesys_lock);
-  off_t pos = file_tell (open_files[fd]);
+  off_t pos = file_tell (thread_current ()->open_files[fd]);
   lock_release (&filesys_lock);
   return ((unsigned) pos);
 }
@@ -347,10 +395,16 @@ tell_handler (int fd)
 void 
 close_handler (int fd)
 {
-  ASSERT (valid_fd (fd));
+  if (!valid_fd (fd))
+    return;
+
+  struct thread *cur = thread_current ();
 
   lock_acquire (&filesys_lock);
-  file_close (open_files[fd]);
+  /* Deny closing running executables here */
+
+  file_close (cur->open_files[fd]);
+  cur->open_files[fd] = NULL;
   lock_release (&filesys_lock);
 } 
 
@@ -360,9 +414,10 @@ close_handler (int fd)
 void 
 validate_pointer (const void *pointer)
 {
-  printf("CUrently vadilating pointer %p \n", pointer);
+ 
   if (pointer == NULL || is_kernel_vaddr (pointer) || 
-      pagedir_get_page (thread_current ()->pagedir, pointer) == NULL)
+      pagedir_get_page (thread_current ()->pagedir, pointer) == NULL
+      || (int) pointer < CODE_SEG_START)
     {
       exit_handler (-1);
     }
