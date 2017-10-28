@@ -1,3 +1,12 @@
+/* 
+ * synch.h 
+ *
+ * Partner 1: Connie Chen, connie
+ * Partner 2: Cindy Truong, cqtruong
+ * Partner 3: Zachary King, zacragu
+ * Date: 10/27/17
+ */
+
 #ifndef THREADS_SYNCH_H
 #define THREADS_SYNCH_H
 
@@ -9,7 +18,7 @@ struct semaphore
   {
     unsigned value;             /* Current value. */
     struct list waiters;        /* List of waiting threads. */
-    struct list_elem held_elem;
+    struct list_elem held_elem; /* List elem for list of held locks. */
   };
 
 void sema_init (struct semaphore *, unsigned value);

@@ -1,3 +1,11 @@
+/* 
+ * process.c 
+ *
+ * Partner 1: Connie Chen, connie
+ * Partner 2: Cindy Truong, cqtruong
+ * Partner 3: Zachary King, zacragu
+ * Date: 10/27/17
+ */
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -8,6 +16,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -78,6 +87,7 @@ start_process (void *file_name_)
   NOT_REACHED ();
 }
 
+/* Zach and Cindy drove here. */
 /* Waits for thread TID to DIE and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -95,38 +105,32 @@ process_wait (tid_t child_tid)
   struct list_elem *e;  
   bool valid_tid = false;
 
-  //printf ("Process_wait beginning HERE!\n");
-  // Validate TID
-  //printf ("children list size:  %d\n", list_size (&cur->children));
+  /* Validate child_tid. */
   for (e = list_begin (&cur->children); e != list_end (&cur->children); 
        e = list_next (e))
     {
       if (list_entry (e, struct thread, child_elem)->tid == child_tid)
         {
-          //printf("process_wait(): found child here.\n");
           valid_tid = true;
           child = list_entry (e, struct thread, child_elem);
           break;
         }
     }
+
   if (!valid_tid)
-    {
-      //printf("process_wait(): not valid tid.\n");
-      return -1;
-    }
-  
-  //printf ("Process_wait before sema HERE!\n");
+    return -1;
 
-  // Die, child
+  /* Allow child to die. */
   sema_up (&child->child_exit_sema);
-  // Block until child awakens us
+  /* Block until child awakens us and is about to finish dying. */
   sema_down (&cur->parent_wait_sema);
-  //printf ("Process_wait after sema HERE!\n\n");
-
   return cur->child_exit_status;
 }
+/* end of Zach and Cindy driving. */
 
-/* Free the current process's resources. */
+/* Zach and Connie drove here. */
+/* Free the current process's resources. Release any locks the 
+   process is holding, and allow any children to die. */
 void
 process_exit (void)
 {
@@ -134,14 +138,9 @@ process_exit (void)
   uint32_t *pd;
   struct list_elem *e;    
 
-
-  //printf ("held_lock list size:  %d\n", list_size (&cur->held_locks));
-
   for (e = list_begin (&cur->held_locks); e != list_end (&cur->held_locks); 
        e = list_next (e))
-    {
-      sema_up (list_entry (e, struct semaphore, held_elem));
-    }
+    sema_up (list_entry (e, struct semaphore, held_elem));
 
   for (e = list_begin (&cur->children); e != list_end (&cur->children); 
        e = list_next (e))
@@ -149,8 +148,6 @@ process_exit (void)
       (list_entry (e, struct thread, child_elem))->parent = NULL;
       sema_up (&list_entry (e, struct thread, child_elem)->child_exit_sema);
     }
-
-  //printf ("in process_exit() after list junk\n");
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -168,8 +165,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-
 }
+/* end of Zach and Connie driving. */
 
 /* Sets up the CPU for running user code in the current
    thread.
@@ -250,6 +247,10 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
+/* Setup_stack values. */
+#define MAX_CMDLINE 128
+#define MAX_ARGC (128/2 + 1)
+
 static bool setup_stack (void **esp, const char *cmdline);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
@@ -269,17 +270,17 @@ load (const char *cmdline, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-
-  /* Need to "parse out the executable from the rest of the command line 
-    so you can load it from the filesys" */
+  /* Cindy and Zach driving now. */
+  const char *file_name = NULL;
   char local_copy[15];
-  char *local_pointer = local_copy;
+  char *local_pointer = NULL;
+ 
+  /* Parse out the executable from the rest of the command line. */
+  local_pointer = local_copy;
   strlcpy (local_pointer, cmdline, sizeof(local_copy));
-
-  char *token = strtok_r (local_pointer, " ", &local_pointer);
-  const char *file_name = token;
-  strlcpy (t->execu_name, file_name, strlen(file_name) + 1);
-
+  file_name = strtok_r (local_pointer, " ", &local_pointer);
+  strlcpy (t->name, file_name, strlen(file_name) + 1);
+  
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -287,12 +288,21 @@ load (const char *cmdline, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire (&filesys_lock);
   file = filesys_open (file_name);
+  lock_release (&filesys_lock);
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+  
+  t->file = file;
+  lock_acquire (&filesys_lock);
+  file_deny_write (file);
+  lock_release (&filesys_lock);
+  /* end of Cindy and Zach driving. */
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -377,7 +387,7 @@ load (const char *cmdline, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
   return success;
 }
 
@@ -489,6 +499,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+/* Zach, Cindy, and Connie drove here. */
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
@@ -497,13 +508,13 @@ setup_stack (void **esp, const char *cmdline)
   uint8_t *kpage;
   bool success = false;
 
-  static char local_copy[128];     /* Local copy of command line. */
-  char *buf = local_copy;         /* Pointer to local copy. */
-  static char *parsed[65];        /* Parsed array. */
-  int *arg_addresses[65];
-  char *token = NULL;
-  int argc = 0;
-  size_t arg_size = 0;            /* Size of each argument. */
+  static char local_copy[MAX_CMDLINE]; /* Local copy of command line. */
+  char *buf = local_copy;              /* Pointer to local copy. */
+  static char *parsed[MAX_ARGC];       /* Parsed array. */
+  int *arg_addresses[MAX_ARGC];        /* Argument address array. */
+  char *token = NULL;                  /* Token. */
+  int argc = 0;                        /* Number of arguments. */
+  size_t arg_size = 0;                 /* Size of each argument. */
   char null_pointer = 0;
   int arg_iterator;
   uint32_t i;
@@ -518,8 +529,7 @@ setup_stack (void **esp, const char *cmdline)
         {
           *esp = PHYS_BASE;
 
-          strlcpy (buf, cmdline, sizeof (local_copy));   /* Make local copy */
-          
+          strlcpy (buf, cmdline, sizeof (local_copy));
           arg_bytes_read = 0;
           /* Parse arguments and store in parsed array. */
           while ((token = strtok_r (buf, " ", &buf))) 
@@ -527,41 +537,34 @@ setup_stack (void **esp, const char *cmdline)
               if (arg_bytes_read + strlen(token) <= PGSIZE)
                 {
                   parsed[argc] = token;
-                  // printf ("arg %d: %s\n", argc, parsed[argc]);
                   argc++;
                   arg_bytes_read += strlen(token);
                 }
               else
                 break;
             }
-          // printf("argc %d\n", argc);
           
-          /* Push arguments onto stack */
+          /* Push arguments onto stack. */
           for (arg_iterator = argc - 1; arg_iterator >= 0; arg_iterator--)
             {
               arg_size = strlen (parsed[arg_iterator]) + 1;
               *esp -= arg_size;
               memcpy (*esp, parsed[arg_iterator], arg_size);
               arg_addresses[arg_iterator] = *esp;
-              // printf ("arg_address[%d]: %p\n", arg_iterator, (void *) 
-              //                          arg_addresses[arg_iterator]);
             }
 
-          /* Word align between array data and pointers to them */
+          /* Word align between array data and pointers to them. */
           before_word_align = ((uint32_t) *esp) % 4;
           if (before_word_align != 0)
             {
               for (i = 0; i < before_word_align; i++)
-                {
-                  *esp -= 1; 
-                }
+                *esp -= 1; 
             }
-          // printf ("esp after word align: %p\n", ((void *) *esp));
           
-          /* Null "sentinel" */
+          /* Null sentinel. */
           *esp -= sizeof (char *);
         
-          /* Push pointers to argument data onto stacki */          
+          /* Push pointers to argument data onto stack. */          
           for (arg_iterator = argc - 1; arg_iterator >= 0; arg_iterator--)
             {
               arg_size = sizeof (arg_addresses[arg_iterator]);
@@ -577,23 +580,16 @@ setup_stack (void **esp, const char *cmdline)
           *esp -= sizeof (int);
           memcpy (*esp, &argc, sizeof (int));
 
-          /* return address */
+          /* Push on a fake return address. */
           *esp -= sizeof (void*);
           memcpy (*esp, &null_pointer, sizeof (void *));
-          // printf ("Final esp: %p\n\n", ((void *) *esp));
-
-          //hex_dump (*esp, *esp, PHYS_BASE-*esp, 1);
-          //printf("\n");
         }
       else
-        {
-
-          palloc_free_page (kpage);
-
-        }
+        palloc_free_page (kpage);
     }
   return success;
 }
+/* end of Cindy, Zach, and Connie driving. */
 
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.

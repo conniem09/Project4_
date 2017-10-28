@@ -1,3 +1,11 @@
+/* 
+ * thread.h 
+ *
+ * Partner 1: Connie Chen, connie
+ * Partner 2: Cindy Truong, cqtruong
+ * Partner 3: Zachary King, zacragu
+ * Date: 10/27/17
+ */
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 
@@ -104,21 +112,22 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
+    /* Zach, Cindy, and Connie drove here. */
+    struct list held_locks;             /* List of held locks. */
+    struct list children;               /* List of child threads. */
+    struct list_elem child_elem;        /* List elem for children list. */
+    struct thread *parent;              /* Pointer to the parent thread. */
+    int child_exit_status;              /* Child's exit status. */     
+    struct file *file;                  /* Running executable. */                 
+    struct semaphore parent_wait_sema;      /* Semaphore for parent. */
+    struct semaphore child_exit_sema;       /* Semaphore for chilld. */  
+
+    struct file *open_files[MAX_FD_COUNT];  /* Process's open files. 
+                                               Index through fd. */
+    /* end of Zach, Cindy, and Connie driving. */
+
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-
-    char execu_name[15];                 /* Executable name */
-    
-    struct list held_locks;             /* List of held locks */
-    struct list children;               /* List of child threads */
-    struct list_elem child_elem;        /* List elem for children list */
-    struct thread *parent;              /* Pointer to the parent thread */
-    int child_exit_status;              /* Child's exit status */                      
-
-    struct semaphore parent_wait_sema;      /* Semaphore for parent */
-    struct semaphore child_exit_sema;       /* Semaphore for chilld */  
-
-    struct file *open_files[MAX_FD_COUNT];  /* Index through fd to get file. */
   };
 
 /* If false (default), use round-robin scheduler.

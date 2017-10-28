@@ -1,3 +1,11 @@
+/* 
+ * thread.c 
+ *
+ * Partner 1: Connie Chen, connie
+ * Partner 2: Cindy Truong, cqtruong
+ * Partner 3: Zachary King, zacragu
+ * Date: 10/27/17
+ */
 #include "threads/thread.h"
 #include <debug.h>
 #include <stddef.h>
@@ -166,10 +174,12 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
 {
-  /* REMOVE THIS FUCKING SHIT */
-  //printf("thread_create()  beginning HERE!\n");
+  /* Disable interrupts to avoid process_wait() being
+     called as a new child is being created. */
+  /* Zach driving now. */
   enum intr_level old_level;
   old_level = intr_disable ();
+  /* end of Zach driving. */
 
   struct thread *t;
   struct kernel_thread_frame *kf;
@@ -186,11 +196,13 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+  /* Zach driving now. */
   t->parent = thread_current ();
   if (t->parent != NULL)
     list_push_back (&t->parent->children, &t->child_elem);
   
-  intr_set_level(old_level);
+  intr_set_level (old_level);
+  /* end of Zach driving. */
 
   tid = t->tid = allocate_tid ();   
 
@@ -476,11 +488,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
+  /* Connie driving now. */
   t->child_exit_status = -1;
   list_init (&t->held_locks);
   list_init (&t->children);
   sema_init (&t->child_exit_sema, 0);
   sema_init (&t->parent_wait_sema, 0);
+  /* end of Connie driving. */
 
   old_level = intr_disable();
   list_push_back (&all_list, &t->allelem);

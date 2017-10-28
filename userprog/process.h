@@ -1,3 +1,12 @@
+/* 
+ * process.h 
+ *
+ * Partner 1: Connie Chen, connie
+ * Partner 2: Cindy Truong, cqtruong
+ * Partner 3: Zachary King, zacragu
+ * Date: 10/27/17
+ */
+
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
 

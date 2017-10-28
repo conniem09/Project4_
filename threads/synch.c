@@ -1,3 +1,12 @@
+/* 
+ * synch.c 
+ *
+ * Partner 1: Connie Chen, connie
+ * Partner 2: Cindy Truong, cqtruong
+ * Partner 3: Zachary King, zacragu
+ * Date: 10/27/17
+ */
+
 /* This file is derived from source code for the Nachos
    instructional operating system.  The Nachos copyright notice
    is reproduced in full below. */
@@ -197,7 +206,9 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   sema_down (&lock->semaphore);
+  /* Zach driving now. */
   list_push_back (&thread_current ()->held_locks, &lock->semaphore.held_elem);
+  /* end of Zach driving. */
   lock->holder = thread_current ();
 }
 
@@ -233,7 +244,9 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
+  /* Zach driving now. */
   list_remove (&lock->semaphore.held_elem);
+  /* end of Zach driving. */
   sema_up (&lock->semaphore);
 }
 
