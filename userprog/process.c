@@ -508,18 +508,19 @@ setup_stack (void **esp, const char *cmdline)
   uint8_t *kpage;
   bool success = false;
 
-  static char local_copy[MAX_CMDLINE]; /* Local copy of command line. */
-  char *buf = local_copy;              /* Pointer to local copy. */
-  static char *parsed[MAX_ARGC];       /* Parsed array. */
-  int *arg_addresses[MAX_ARGC];        /* Argument address array. */
-  char *token = NULL;                  /* Token. */
-  int argc = 0;                        /* Number of arguments. */
-  size_t arg_size = 0;                 /* Size of each argument. */
+  static char local_copy[MAX_CMDLINE];  /* Local copy of command line. */
+  char *buf = local_copy;               /* Pointer to local copy. */
+  static char *parsed[MAX_ARGC];        /* Parsed array. */
+  int *arg_addresses[MAX_ARGC];         /* Argument address array. */
+  char *token = NULL;                   /* Argument token. */
+  int argc = 0;                         /* Number of arguments. */
+  size_t arg_size = 0;                  /* Size of each argument. */
+  void *predicted_esp = NULL;           /* Predicted end esp for checking
+                                          stack overflow. */
+  uint32_t before_word_align;
   char null_pointer = 0;
   int arg_iterator;
   uint32_t i;
-  uint32_t before_word_align;
-  int arg_bytes_read;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
@@ -528,20 +529,12 @@ setup_stack (void **esp, const char *cmdline)
       if (success) 
         {
           *esp = PHYS_BASE;
-
           strlcpy (buf, cmdline, sizeof (local_copy));
-          arg_bytes_read = 0;
           /* Parse arguments and store in parsed array. */
           while ((token = strtok_r (buf, " ", &buf))) 
             {
-              if (arg_bytes_read + strlen(token) <= PGSIZE)
-                {
-                  parsed[argc] = token;
-                  argc++;
-                  arg_bytes_read += strlen(token);
-                }
-              else
-                break;
+              parsed[argc] = token;
+              argc++;
             }
           
           /* Push arguments onto stack. */
@@ -549,6 +542,7 @@ setup_stack (void **esp, const char *cmdline)
             {
               arg_size = strlen (parsed[arg_iterator]) + 1;
               *esp -= arg_size;
+              validate_pointer (*esp);
               memcpy (*esp, parsed[arg_iterator], arg_size);
               arg_addresses[arg_iterator] = *esp;
             }
@@ -560,10 +554,14 @@ setup_stack (void **esp, const char *cmdline)
               for (i = 0; i < before_word_align; i++)
                 *esp -= 1; 
             }
-          
+          validate_pointer (*esp);
+
+          /* Check for stack overflow. */
+          predicted_esp = *esp - (argc + 4) * 4;
+          validate_pointer (predicted_esp);
+         
           /* Null sentinel. */
           *esp -= sizeof (char *);
-        
           /* Push pointers to argument data onto stack. */          
           for (arg_iterator = argc - 1; arg_iterator >= 0; arg_iterator--)
             {
@@ -574,12 +572,10 @@ setup_stack (void **esp, const char *cmdline)
  
           /* Push on pointer to argv */
           memcpy ((*esp - sizeof (char *)), esp, sizeof (char*));
-          *esp -= sizeof (char *);
-         
+          *esp -= sizeof (char *);         
           /* Push the argc on */
           *esp -= sizeof (int);
           memcpy (*esp, &argc, sizeof (int));
-
           /* Push on a fake return address. */
           *esp -= sizeof (void*);
           memcpy (*esp, &null_pointer, sizeof (void *));
