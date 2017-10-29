@@ -150,16 +150,8 @@ exit_handler (int status)
   file_close (cur->file);
   lock_release (&filesys_lock);
   printf ("%s: exit(%d)\n", cur->name, status);
-  process_exit ();
-  
-  if (cur->parent != NULL)
-    {
-      sema_down (&cur->child_exit_sema);
-      cur->parent->child_exit_status = status;
-      list_remove (&cur->child_elem);
-      sema_up (&cur->parent->parent_wait_sema);
-    }
-  
+
+  cur->exit_status = status;  
   thread_exit ();
 }
 
