@@ -490,6 +490,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           palloc_free_page (kpage);
           return false; 
         }
+      struct frame_table_entry *new_entry;
+      new_entry = malloc(sizeof(struct frame_table_entry));
+      new_entry->pd = thread_current ()->pagedir;
+      new_entry->upage = upage;
+      new_entry->owner = thread_current ();
+      new_entry->pinned = false;
+      frame_table[kpage] = new_entry;
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -571,13 +578,13 @@ setup_stack (void **esp, const char *cmdline)
             }
  
           /* Push on pointer to argv */
-          memcpy ((*esp - sizeof (char *)), esp, sizeof (char*));
+          memcpy ((*esp - sizeof (char *)), esp, sizeof (char *));
           *esp -= sizeof (char *);         
           /* Push the argc on */
           *esp -= sizeof (int);
           memcpy (*esp, &argc, sizeof (int));
           /* Push on a fake return address. */
-          *esp -= sizeof (void*);
+          *esp -= sizeof (void *);
           memcpy (*esp, &null_pointer, sizeof (void *));
         }
       else

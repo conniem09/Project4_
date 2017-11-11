@@ -37,6 +37,7 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
+#include "vm/frame.c"
 
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
@@ -126,6 +127,8 @@ main (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
+
+  frame_table_init ();
 
   printf ("Boot complete.\n");
   

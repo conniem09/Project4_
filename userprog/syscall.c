@@ -401,11 +401,8 @@ validate_pointer (const void *pointer)
 {
  
   if (pointer == NULL || is_kernel_vaddr (pointer) || 
-      pagedir_get_page (thread_current ()->pagedir, pointer) == NULL
-      || (uint32_t) pointer < CODE_SEG_START)
-    {
-      exit_handler (-1);
-    }
+      pagedir_get_page (thread_current ()->pagedir, pointer) == NULL)
+    exit_handler (-1);
 }
 
 /* Checks if a buffer passed in is valid. 

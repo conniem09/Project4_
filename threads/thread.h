@@ -13,6 +13,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "synch.h"
+#include "lib/kernel/hash.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -125,6 +126,9 @@ struct thread
     struct file *open_files[MAX_FD_COUNT];  /* Process's open files. 
                                                Index through fd. */
     /* end of Zach, Cindy, and Connie driving. */
+
+    struct hash supp_page_table;          /* Extra info about pages
+                                              in page directory */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

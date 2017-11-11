@@ -19,6 +19,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "vm/page.c"
+#include "lib/kernel/hash.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -494,6 +496,8 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init (&t->children);
   sema_init (&t->child_exit_sema, 0);
   sema_init (&t->parent_wait_sema, 0);
+
+  hash_init (&t->supp_page_table, &pt_hash_func, &pt_less_func, NULL);
   /* end of Connie driving. */
 
   old_level = intr_disable();
