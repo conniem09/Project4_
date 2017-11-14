@@ -9,11 +9,12 @@
 #ifndef VM_PAGE_H
 #define VM_PAGE_H
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "lib/kernel/hash.h"
+#include <hash.h>
 
-/* Supplementary page table. */
+/* Supplementary page table entry. */
 struct supp_pte
 {
   void *upage;
@@ -27,7 +28,6 @@ struct supp_pte
 };
 
 unsigned pt_hash_func (const struct hash_elem *element, void *aux);
-
 bool pt_less_func (const struct hash_elem *a, const struct hash_elem *b, 
 	void *aux);
 

@@ -37,7 +37,7 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
-#include "vm/frame.c"
+#include "vm/frame.h"
 
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
@@ -128,7 +128,9 @@ main (void)
   filesys_init (format_filesys);
 #endif
 
+  /* Zach is driving */
   frame_table_init ();
+  /* end of Zach driving */
 
   printf ("Boot complete.\n");
   

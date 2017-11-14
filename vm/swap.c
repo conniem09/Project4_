@@ -7,4 +7,13 @@
 
 */
 
-struct bitmap swap_table;
+#include "vm/swap.h"
+#include <bitmap.h>
+
+struct bitmap *swap_table;
+
+void swap_table_init (size_t bit_cnt)
+{
+  /* Do some error checking for bitmap_create */
+  swap_table = bitmap_create (bit_cnt);
+}

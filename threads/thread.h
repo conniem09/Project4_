@@ -13,7 +13,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "synch.h"
-#include "lib/kernel/hash.h"
+#include <hash.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -118,17 +118,18 @@ struct thread
     struct list children;               /* List of child threads. */
     struct list_elem child_elem;        /* List elem for children list. */
     struct thread *parent;              /* Pointer to the parent thread. */
-    int child_exit_status;              /* Child's exit status. */     
+    int exit_status;                    /* Child's exit status. */     
     struct file *file;                  /* Running executable. */                 
     struct semaphore parent_wait_sema;      /* Semaphore for parent. */
-    struct semaphore child_exit_sema;       /* Semaphore for chilld. */  
+    struct semaphore child_exit_sema;       /* Semaphore for child. */  
+    bool load_success;                  /* Success/failure status of load. */
+    struct semaphore exec_sema;         /* Wait for load success status. */
 
     struct file *open_files[MAX_FD_COUNT];  /* Process's open files. 
-                                               Index through fd. */
+                                               Index through fd. */  
+    struct hash supp_page_table;        /* Extra info about pages
+                                           in page directory */
     /* end of Zach, Cindy, and Connie driving. */
-
-    struct hash supp_page_table;          /* Extra info about pages
-                                              in page directory */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

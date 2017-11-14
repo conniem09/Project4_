@@ -10,6 +10,10 @@
 #include "threads/loader.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+#include "threads/thread.h"
+#include "vm/frame.h"
+
 
 /* Page allocator.  Hands out memory in page-size (or
    page-multiple) chunks.  See malloc.h for an allocator that
@@ -59,7 +63,6 @@ palloc_init (size_t user_page_limit)
   init_pool (&kernel_pool, free_start, kernel_pages, "kernel pool");
   init_pool (&user_pool, free_start + kernel_pages * PGSIZE,
              user_pages, "user pool");
-  printf("\ninit_ram_pages: %u\n\n", init_ram_pages);
 }
 
 /* Obtains and returns a group of PAGE_CNT contiguous free pages.
@@ -99,6 +102,21 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
     }
 
   return pages;
+}
+
+/* Create new frame table entry and adds it to the frame table. */
+void create_fte (void *upage, void *kpage)
+{
+  struct pool *pool = &user_pool;
+  struct frame_table_entry *new_entry;
+
+  new_entry = malloc (sizeof (struct frame_table_entry));
+  new_entry->pd = thread_current ()->pagedir;
+  new_entry->upage = upage;
+  new_entry->owner = thread_current ();
+  new_entry->pinned = false;
+
+  frame_table[((uintptr_t) vtop (kpage) - (uintptr_t) pool->base)/PGSIZE] = new_entry;
 }
 
 /* Obtains a single free page and returns its kernel virtual

@@ -7,10 +7,7 @@
 
  */
 #include "vm/page.h"
-#include <stdint.h>
-#include <stdbool.h>
 #include "userprog/pagedir.h"
-#include "lib/kernel/hash.h"
 
 unsigned pt_hash_func (const struct hash_elem *element, void *aux)
 {

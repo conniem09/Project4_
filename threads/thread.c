@@ -19,8 +19,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "vm/page.c"
-#include "lib/kernel/hash.h"
+#include "vm/page.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -198,12 +197,14 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+  
   /* Zach driving now. */
   t->parent = thread_current ();
   if (t->parent != NULL)
     list_push_back (&t->parent->children, &t->child_elem);
-  
   intr_set_level (old_level);
+
+  hash_init (&t->supp_page_table, &pt_hash_func, &pt_less_func, NULL);
   /* end of Zach driving. */
 
   tid = t->tid = allocate_tid ();   
@@ -491,13 +492,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   /* Connie driving now. */
-  t->child_exit_status = -1;
+  t->exit_status = -1;
   list_init (&t->held_locks);
   list_init (&t->children);
   sema_init (&t->child_exit_sema, 0);
   sema_init (&t->parent_wait_sema, 0);
-
-  hash_init (&t->supp_page_table, &pt_hash_func, &pt_less_func, NULL);
+  t->load_success = false;
+  sema_init (&t->exec_sema, 0);
   /* end of Connie driving. */
 
   old_level = intr_disable();

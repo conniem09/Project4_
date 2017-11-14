@@ -150,16 +150,8 @@ exit_handler (int status)
   file_close (cur->file);
   lock_release (&filesys_lock);
   printf ("%s: exit(%d)\n", cur->name, status);
-  process_exit ();
-  
-  if (cur->parent != NULL)
-    {
-      sema_down (&cur->child_exit_sema);
-      cur->parent->child_exit_status = status;
-      list_remove (&cur->child_elem);
-      sema_up (&cur->parent->parent_wait_sema);
-    }
-  
+
+  cur->exit_status = status;
   thread_exit ();
 }
 
@@ -190,6 +182,11 @@ exec_handler (const char *cmd_line)
   pid_t pid = process_execute (cmd_line);
   if (pid == TID_ERROR)
     return -1;
+
+  /* Wait for executable to finish loading. */
+  //sema_down (&thread_current ()->exec_sema);
+  //if (!thread_current ()->load_success)
+  //  return -1;
   return pid;
 }
 /* end of Cindy, Zach, and Connie driving. */
@@ -410,6 +407,15 @@ validate_pointer (const void *pointer)
 void
 validate_buffer (const void *buffer, unsigned size) 
 {
+  /*unsigned i;
+  unsigned num_pages = size / PGSIZE;
+
+  if (size % PGSIZE != 0)
+    num_pages++;
+
+  for (i = 0; i < num_pages; i++)
+    validate_pointer ((const void *) (((int *) buffer) + i*PGSIZE));*/
+    
   unsigned i;
   unsigned pointer_size = sizeof (const void *);
   unsigned num_pointers = size / pointer_size;

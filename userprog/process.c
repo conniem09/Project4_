@@ -27,7 +27,9 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "threads/malloc.h"
 #include "lib/kernel/list.h"
+#include "vm/frame.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -71,6 +73,10 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
+  /* Cindy is most definitely not driving here */
+  //thread_current ()->parent->load_success = success;
+  //sema_up (&thread_current ()->parent->exec_sema);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -124,7 +130,8 @@ process_wait (tid_t child_tid)
   sema_up (&child->child_exit_sema);
   /* Block until child awakens us and is about to finish dying. */
   sema_down (&cur->parent_wait_sema);
-  return cur->child_exit_status;
+  
+  return cur->exit_status;
 }
 /* end of Zach and Cindy driving. */
 
@@ -164,6 +171,14 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+    }
+
+  if (cur->parent != NULL)
+    {
+      sema_down (&cur->child_exit_sema);
+      cur->parent->exit_status = cur->exit_status;
+      list_remove (&cur->child_elem);  
+      sema_up (&cur->parent->parent_wait_sema);     
     }
 }
 /* end of Zach and Connie driving. */
@@ -248,8 +263,8 @@ struct Elf32_Phdr
 #define PF_R 4          /* Readable. */
 
 /* Setup_stack values. */
-#define MAX_CMDLINE 128
-#define MAX_ARGC (128/2 + 1)
+#define MAX_CMDLINE 512
+#define MAX_ARGC (MAX_CMDLINE/2 + 1)
 
 static bool setup_stack (void **esp, const char *cmdline);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
@@ -490,13 +505,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           palloc_free_page (kpage);
           return false; 
         }
-      struct frame_table_entry *new_entry;
-      new_entry = malloc(sizeof(struct frame_table_entry));
-      new_entry->pd = thread_current ()->pagedir;
-      new_entry->upage = upage;
-      new_entry->owner = thread_current ();
-      new_entry->pinned = false;
-      frame_table[kpage] = new_entry;
+
+      /* Add new frame table entry. */
+      // Perfect 
+      //create_fte (upage, kpage);
+
 
       /* Advance. */
       read_bytes -= page_read_bytes;
