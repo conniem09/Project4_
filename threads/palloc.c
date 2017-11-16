@@ -104,19 +104,12 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
   return pages;
 }
 
-/* Create new frame table entry and adds it to the frame table. */
-void create_fte (void *upage, void *kpage)
+/* Performs translations from kernel virtual address for a user 
+   pool page to frame table index. */
+uintptr_t get_ft_index (void *kpage)
 {
   struct pool *pool = &user_pool;
-  struct frame_table_entry *new_entry;
-
-  new_entry = malloc (sizeof (struct frame_table_entry));
-  new_entry->pd = thread_current ()->pagedir;
-  new_entry->upage = upage;
-  new_entry->owner = thread_current ();
-  new_entry->pinned = false;
-
-  frame_table[((uintptr_t) vtop (kpage) - (uintptr_t) pool->base)/PGSIZE] = new_entry;
+  return ((uintptr_t) kpage - (uintptr_t) pool->base) / PGSIZE;
 }
 
 /* Obtains a single free page and returns its kernel virtual

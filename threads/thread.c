@@ -499,6 +499,7 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init (&t->parent_wait_sema, 0);
   t->load_success = false;
   sema_init (&t->exec_sema, 0);
+  sema_init (&t->spt_sema, 1);
   /* end of Connie driving. */
 
   old_level = intr_disable();

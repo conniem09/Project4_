@@ -19,13 +19,15 @@ struct frame_table_entry **frame_table;
 /* Frame table entry. */
 struct frame_table_entry 
 {
+  struct thread *owner;
   uint32_t *pd;
   void *upage;
-  struct thread *owner;
   bool pinned;
 };
 
 void frame_table_init (void);
+void create_fte (void *upage, void *kpage);
+void remove_all_fte (struct thread *dying);
 
 void print_frame_table (void);
 

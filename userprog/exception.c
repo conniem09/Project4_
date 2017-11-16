@@ -14,6 +14,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/syscall.h"
+#include "threads/vaddr.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -157,6 +158,21 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
+
+  /* Demand page for faulting address. */
+  uint8_t *kpage = palloc_get_page (PAL_USER);
+  if (kpage == NULL)
+    {
+      /* Then we need to evict a page from a frame.
+         A problem for future Zach, Connie, and Cindy. */
+    }
+  uint8_t *upage = pg_round_down (fault_addr);
+  if (install_page (upage, kpage, )) 
+    {
+      create_fte (upage, kpage);
+      spte_create (upage, kpage, false, false, false, 0, file, ofs);
+      return;
+    }
 
   validate_pointer (fault_addr);
 

@@ -38,6 +38,7 @@
 #include "filesys/fsutil.h"
 #endif
 #include "vm/frame.h"
+#include "vm/swap.h"
 
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
@@ -130,6 +131,8 @@ main (void)
 
   /* Zach is driving */
   frame_table_init ();
+  struct block *swap_block = block_get_role (BLOCK_SWAP);
+  swap_table_init (block_size (swap_block) * BLOCK_SECTOR_SIZE / PGSIZE);
   /* end of Zach driving */
 
   printf ("Boot complete.\n");

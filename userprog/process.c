@@ -30,6 +30,7 @@
 #include "threads/malloc.h"
 #include "lib/kernel/list.h"
 #include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -75,8 +76,8 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* Cindy is most definitely not driving here */
-  //thread_current ()->parent->load_success = success;
-  //sema_up (&thread_current ()->parent->exec_sema);
+  thread_current ()->parent->load_success = success;
+  sema_up (&thread_current ()->parent->exec_sema);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -126,12 +127,14 @@ process_wait (tid_t child_tid)
   if (!valid_tid)
     return -1;
 
-  /* Allow child to die. */
-  sema_up (&child->child_exit_sema);
   /* Block until child awakens us and is about to finish dying. */
-  sema_down (&cur->parent_wait_sema);
+  sema_down (&child->parent_wait_sema);
+  int status = child->exit_status;
+  /* Allow child to die. */
+  list_remove(&child->child_elem);
+  sema_up (&child->child_exit_sema);
   
-  return cur->exit_status;
+  return status;
 }
 /* end of Zach and Cindy driving. */
 
@@ -175,10 +178,9 @@ process_exit (void)
 
   if (cur->parent != NULL)
     {
+      sema_up (&cur->parent_wait_sema);
       sema_down (&cur->child_exit_sema);
-      cur->parent->exit_status = cur->exit_status;
-      list_remove (&cur->child_elem);  
-      sema_up (&cur->parent->parent_wait_sema);     
+      //sema_down (&cur->spt_sema);
     }
 }
 /* end of Zach and Connie driving. */
@@ -489,7 +491,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
       if (kpage == NULL)
-        return false;
+        {
+          return false;
+        }
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
@@ -506,10 +510,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           return false; 
         }
 
+      /* At this point, assume that a page was successfully retrieved and 
+         mapped. */
       /* Add new frame table entry. */
-      // Perfect 
-      //create_fte (upage, kpage);
-
+      create_fte (upage, kpage);
+      spte_create (upage, kpage, false, false, false, 0, file, ofs);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -548,6 +553,9 @@ setup_stack (void **esp, const char *cmdline)
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success) 
         {
+          spte_create (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, false, false, 
+                       true, 0, NULL, 0);
+
           *esp = PHYS_BASE;
           strlcpy (buf, cmdline, sizeof (local_copy));
           /* Parse arguments and store in parsed array. */

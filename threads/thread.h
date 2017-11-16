@@ -122,6 +122,7 @@ struct thread
     struct file *file;                  /* Running executable. */                 
     struct semaphore parent_wait_sema;      /* Semaphore for parent. */
     struct semaphore child_exit_sema;       /* Semaphore for child. */  
+
     bool load_success;                  /* Success/failure status of load. */
     struct semaphore exec_sema;         /* Wait for load success status. */
 
@@ -129,6 +130,7 @@ struct thread
                                                Index through fd. */  
     struct hash supp_page_table;        /* Extra info about pages
                                            in page directory */
+    struct semaphore spt_sema;          /* Semaphore for supp_page_table. */
     /* end of Zach, Cindy, and Connie driving. */
 
     /* Owned by thread.c. */

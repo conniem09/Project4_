@@ -184,9 +184,9 @@ exec_handler (const char *cmd_line)
     return -1;
 
   /* Wait for executable to finish loading. */
-  //sema_down (&thread_current ()->exec_sema);
-  //if (!thread_current ()->load_success)
-  //  return -1;
+  sema_down (&thread_current ()->exec_sema);
+  if (!thread_current ()->load_success)
+    return -1;
   return pid;
 }
 /* end of Cindy, Zach, and Connie driving. */
@@ -407,24 +407,16 @@ validate_pointer (const void *pointer)
 void
 validate_buffer (const void *buffer, unsigned size) 
 {
-  /*unsigned i;
+
+  unsigned i;
   unsigned num_pages = size / PGSIZE;
 
   if (size % PGSIZE != 0)
     num_pages++;
 
   for (i = 0; i < num_pages; i++)
-    validate_pointer ((const void *) (((int *) buffer) + i*PGSIZE));*/
-    
-  unsigned i;
-  unsigned pointer_size = sizeof (const void *);
-  unsigned num_pointers = size / pointer_size;
+    validate_pointer ((const void *) (((uint32_t) buffer) + i*PGSIZE));
 
-  if (size % pointer_size != 0)
-    num_pointers++;
-
-  for (i = 0; i < num_pointers; i++)
-    validate_pointer ((const void *) (((int *) buffer) + i));
 }
 
 /* Checks if fd is in range of array. If not, return false. */
