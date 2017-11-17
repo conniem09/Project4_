@@ -15,6 +15,11 @@
 #include "threads/thread.h"
 #include "userprog/syscall.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
+#include "userprog/process.h"
+#include "userprog/pagedir.h"
+#include "vm/page.h"
+#include "vm/frame.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -159,34 +164,89 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* Demand page for faulting address. */
-  uint8_t *kpage = palloc_get_page (PAL_USER);
-  if (kpage == NULL)
-    {
-      /* Then we need to evict a page from a frame.
-         A problem for future Zach, Connie, and Cindy. */
-    }
-  uint8_t *upage = pg_round_down (fault_addr);
-  if (install_page (upage, kpage, )) 
-    {
-      create_fte (upage, kpage);
-      spte_create (upage, kpage, false, false, false, 0, file, ofs);
-      return;
-    }
-
   validate_pointer (fault_addr);
+  validate_pointer (f->esp);
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
+  if (!not_present)
+  {
+    printf("There is no writing to r/o in Pintos!\n");
+    kill (f);
+  }
 
-  printf("There is no crying in Pintos!\n");
+  /* Demand page for faulting address. */
+  uint8_t *upage = pg_round_down (fault_addr);
+  struct supp_pte *spte = spte_lookup (upage);
 
-  kill (f);
+  uint8_t *kpage = palloc_get_page (PAL_USER);
+
+  /* Evict a page and bring in the faulting page in frame. */
+  if (kpage == NULL) 
+    {
+      //kpage = EVICT_SOME_POOR_FUCKER();
+    }
+  
+  if (spte != NULL) /* Supplementary page table info available from previous attempt */
+    {
+      // /* Fill in the frame */
+      // if (pagedir_set_page (thread_current ()->pagedir, upage, kpage, true)) 
+      //   {
+      //     create_fte (upage, kpage);
+      //     if (supp_pte->in_filesys)
+      //       {
+      //         // There is data to be read
+      //         if (supp_pte->file != NULL)
+      //           {
+      //             struct file *file = supp_pte->file;
+      //             off_t ofs = supp_pte->ofs; 
+      //             file_seek (file, ofs);
+      //             if (file_read (file, kpage, supp_pte->page_read_bytes) != 
+      //               (int) supp_pte->page_read_bytes)
+      //               {
+      //                 palloc_free_page (kpage);
+      //                 free (frame_table[get_ft_index (kpage)]); 
+      //                 frame_table[get_ft_index (kpage)] = NULL;
+      //                 kill (f); 
+      //               }
+      //           }
+      //         if (!install_page (upage, kpage, writable)) 
+      //           {
+      //             palloc_free_page (kpage);
+      //             free (frame_table[get_ft_index (kpage)]); 
+      //             frame_table[get_ft_index (kpage)] = NULL;
+      //             kill (f); 
+      //           }
+      //         memset (kpage + supp_pte->page_read_bytes, 0, 
+      //               PGSIZE-supp_pte->read_bytes);
+      //       }
+      //   }
+
+      if (!spte_set_page (spte, upage, kpage))
+        kill (f);
+    }
+  else /* First attempt to use this virtual page - stackax */
+    {
+      if (fault_addr == (f->esp - (4 / sizeof (void *))) || 
+            fault_addr == (f->esp - (32 / sizeof (void *))))
+        {
+          //STEP BACK OFF THE FUCKING STACK 
+        }
+      else // Stack growth is only growth
+        {
+          kill (f);
+        }
+    }
+
+  // /* To implement virtual memory, delete the rest of the function
+  //    body, and replace it with code that brings in the page to
+  //    which fault_addr refers. */
+  // printf ("Page fault at %p: %s error %s page in %s context.\n",
+  //         fault_addr,
+  //         not_present ? "not present" : "rights violation",
+  //         write ? "writing" : "reading",
+  //         user ? "user" : "kernel");
+
+  // printf("There is no crying in Pintos!\n");
+
+  // kill (f);
 }
 

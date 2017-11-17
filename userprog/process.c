@@ -488,33 +488,32 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
-        {
-          return false;
-        }
+      // /* Get a page of memory. */
+      // uint8_t *kpage = palloc_get_page (PAL_USER);
+      // if (kpage == NULL)
+      //   {
+      //     return false;
+      //   }
 
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+      // /* Load this page. */
+      // if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+      //   {
+      //     palloc_free_page (kpage);
+      //     return false; 
+      //   }
+      // memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-
-      /* At this point, assume that a page was successfully retrieved and 
-         mapped. */
-      /* Add new frame table entry. */
-      create_fte (upage, kpage);
-      spte_create (upage, kpage, false, false, false, 0, file, ofs);
+      // /* Add the page to the process's address space. */
+      // if (!install_page (upage, kpage, writable)) 
+      //   {
+      //     palloc_free_page (kpage);
+      //     return false; 
+      //   
+      if (page_zero_bytes != PGSIZE)
+        spte_create (upage, NULL, false, true, false, 0, file, ofs, 
+          page_read_bytes, writable);
+      else 
+        spte_create (upage, NULL, false, true, false, 0, NULL, 0, 0, writable);   
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -554,7 +553,7 @@ setup_stack (void **esp, const char *cmdline)
       if (success) 
         {
           spte_create (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, false, false, 
-                       true, 0, NULL, 0);
+                       true, 0, NULL, 0, 0, false);
 
           *esp = PHYS_BASE;
           strlcpy (buf, cmdline, sizeof (local_copy));

@@ -397,8 +397,8 @@ void
 validate_pointer (const void *pointer)
 {
  
-  if (pointer == NULL || is_kernel_vaddr (pointer) || 
-      pagedir_get_page (thread_current ()->pagedir, pointer) == NULL)
+  if (pointer == NULL || is_kernel_vaddr (pointer) /*|| 
+      pagedir_get_page (thread_current ()->pagedir, pointer) == NULL*/)
     exit_handler (-1);
 }
 
