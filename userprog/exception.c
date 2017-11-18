@@ -164,29 +164,50 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  printf("fucking faulting address %p\n", fault_addr);
+  printf("esp I guess because cn't turst anything anoymofeabl %p\n", f->esp);
   validate_pointer (fault_addr);
-  validate_pointer (f->esp);
+  // //validate_pointer (f->esp);
 
-  if (!not_present)
-  {
-    printf("There is no writing to r/o in Pintos!\n");
-    kill (f);
-  }
+  // if (!not_present)
+  // {
+  //   printf("There is no writing to r/o in Pintos!\n");
+  //   kill (f);
+  // }
 
+  printf("Yeeeehaaahhh BLOCK 1\n");
   /* Demand page for faulting address. */
-  uint8_t *upage = pg_round_down (fault_addr);
+  bool success = false;
+  uint8_t *upage = pg_round_down (fault_addr);  
   struct supp_pte *spte = spte_lookup (upage);
-
   uint8_t *kpage = palloc_get_page (PAL_USER);
+
+  printf("END BLOCK 1\n\n");
 
   /* Evict a page and bring in the faulting page in frame. */
   if (kpage == NULL) 
     {
+      PANIC ("Eviction not yet implemented");
       //kpage = EVICT_SOME_POOR_FUCKER();
     }
+
+  printf("\nSTART BLOCK 4\n");
+
+  printf("************************** MAPPING %p\n", upage);
+  printf("************************** MAPPING TO %p\n", kpage);
+  printf("\n");
   
   if (spte != NULL) /* Supplementary page table info available from previous attempt */
     {
+      if (spte->in_filesys)
+        {
+          success = set_page_filesys (spte, upage, kpage);
+          printf("set_page_filesys success: %d\n", success);
+        }
+      else if (spte->in_swap)
+        {
+          success = set_page_swap (spte, upage, kpage);
+        }
       // /* Fill in the frame */
       // if (pagedir_set_page (thread_current ()->pagedir, upage, kpage, true)) 
       //   {
@@ -220,21 +241,28 @@ page_fault (struct intr_frame *f)
       //       }
       //   }
 
-      if (!spte_set_page (spte, upage, kpage))
-        kill (f);
-    }
-  else /* First attempt to use this virtual page - stackax */
-    {
-      if (fault_addr == (f->esp - (4 / sizeof (void *))) || 
-            fault_addr == (f->esp - (32 / sizeof (void *))))
-        {
-          //STEP BACK OFF THE FUCKING STACK 
-        }
-      else // Stack growth is only growth
+      if (!success)
         {
           kill (f);
         }
     }
+  else  /* First attempt to use this virtual page - stackax */
+    {
+      if (fault_addr == (f->esp - (4 / sizeof (void *))) || 
+            fault_addr == (f->esp - (32 / sizeof (void *))))
+        {
+          printf("Stack thing here\n");
+          //STEP BACK OFF THE FUCKING STACK 
+        }
+      else // Stack growth is only growth
+        {
+          ASSERT (false);
+          kill (f);
+        }
+      printf ("Down here in else land\n");
+    }
+
+  printf("\nEND BLOCK 4\n");
 
   // /* To implement virtual memory, delete the rest of the function
   //    body, and replace it with code that brings in the page to
@@ -248,5 +276,6 @@ page_fault (struct intr_frame *f)
   // printf("There is no crying in Pintos!\n");
 
   // kill (f);
+
 }
 

@@ -13,15 +13,12 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 
-/* Total number of pages in user pool. */
-#define NUM_USR_FRAMES 367
-
 struct lock ft_lock;
 
 void frame_table_init (void)
 {
   lock_init (&ft_lock);
-  frame_table = malloc (NUM_USR_FRAMES * sizeof (struct frame_table_entry));
+  //frame_table = malloc (NUM_USR_FRAMES * sizeof (struct frame_table_entry));
 }
 
 /* Create new frame table entry and adds it to the frame table. */

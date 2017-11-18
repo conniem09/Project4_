@@ -204,7 +204,8 @@ thread_create (const char *name, int priority,
     list_push_back (&t->parent->children, &t->child_elem);
   intr_set_level (old_level);
 
-  hash_init (&t->supp_page_table, &pt_hash_func, &pt_less_func, NULL);
+  if (!hash_init (&t->supp_page_table, &pt_hash_func, &pt_less_func, NULL))
+    PANIC ("Hash_init fail");
   /* end of Zach driving. */
 
   tid = t->tid = allocate_tid ();   

@@ -488,7 +488,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      // /* Get a page of memory. */
+      /* Get a page of memory. */
       // uint8_t *kpage = palloc_get_page (PAL_USER);
       // if (kpage == NULL)
       //   {
@@ -508,7 +508,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       //   {
       //     palloc_free_page (kpage);
       //     return false; 
-      //   
+      //   }
+        
       if (page_zero_bytes != PGSIZE)
         spte_create (upage, NULL, false, true, false, 0, file, ofs, 
           page_read_bytes, writable);
@@ -546,14 +547,16 @@ setup_stack (void **esp, const char *cmdline)
   int arg_iterator;
   uint32_t i;
 
+  printf("\nSTART BLOCK 2\n");
+
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success) 
         {
-          spte_create (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, false, false, 
-                       true, 0, NULL, 0, 0, false);
+          //spte_create (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, false, false, 
+                       //true, 0, NULL, 0, 0, false);
 
           *esp = PHYS_BASE;
           strlcpy (buf, cmdline, sizeof (local_copy));
@@ -610,6 +613,7 @@ setup_stack (void **esp, const char *cmdline)
       else
         palloc_free_page (kpage);
     }
+    printf("\nEND BLOCK 2\n");
   return success;
 }
 /* end of Cindy, Zach, and Connie driving. */

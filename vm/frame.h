@@ -13,8 +13,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* Total number of pages in user pool. */
+#define NUM_USR_FRAMES 367
+
 /* Frame table of frame table entries. */
-struct frame_table_entry **frame_table;
+struct frame_table_entry *frame_table[NUM_USR_FRAMES];
 
 /* Frame table entry. */
 struct frame_table_entry 

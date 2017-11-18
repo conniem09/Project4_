@@ -396,10 +396,14 @@ close_handler (int fd)
 void 
 validate_pointer (const void *pointer)
 {
- 
+  if (pointer == NULL)
+    printf("HEEEEEERE %p\n");
   if (pointer == NULL || is_kernel_vaddr (pointer) /*|| 
       pagedir_get_page (thread_current ()->pagedir, pointer) == NULL*/)
+  {
+    printf("Here! too lazy for decent printf statements anymroe\n");
     exit_handler (-1);
+  }
 }
 
 /* Checks if a buffer passed in is valid. 
