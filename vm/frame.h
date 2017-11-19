@@ -25,12 +25,17 @@ struct frame_table_entry
   struct thread *owner;
   uint32_t *pd;
   void *upage;
+  void *kpage;
   bool pinned;
 };
 
 void frame_table_init (void);
 void create_fte (void *upage, void *kpage);
 void remove_all_fte (struct thread *dying);
+
+/* Functions for eviction. */
+struct frame_table_entry *choose_victim (void);
+void *frame_evict (void);
 
 void print_frame_table (void);
 

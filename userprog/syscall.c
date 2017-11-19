@@ -402,8 +402,9 @@ close_handler (int fd)
 void 
 validate_pointer (const void *pointer)
 {
-  if (pointer == NULL || is_kernel_vaddr (pointer) || pointer < CODE_SEG_START)
+  if (pointer == NULL || is_kernel_vaddr (pointer)/* || pointer < CODE_SEG_START*/)
   {
+//    printf("In validate pointer: %p\n", pointer);
     exit_handler (-1);
   }
 }
@@ -466,13 +467,13 @@ validate_buffer (const void *buffer, unsigned size, struct intr_frame *f)
               success = set_page_stack (upage, kpage);
               //ASSERT(false);
             }
-          else if (cur_ptr == (f->esp - (4 /*/ sizeof (void *)*/)) || 
-                   cur_ptr == (f->esp - (32 /*/ sizeof (void *)*/)))
+          else if (cur_ptr == (f->esp - 4) || cur_ptr == (f->esp - 32))
             {
               success = set_page_stack (upage, kpage);
             }
           else // Stack growth is only growth
             {
+              printf("Validate buffer failure.\n");
               exit_handler (-1);
             }
         }

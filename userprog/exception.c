@@ -177,6 +177,7 @@ page_fault (struct intr_frame *f)
   {
     //printf("There is no writing to r/o in Pintos!\n");
     //kill (f);
+    printf("exit: !not_present\n");
     exit_handler (-1);
   }
 
@@ -186,11 +187,13 @@ page_fault (struct intr_frame *f)
   struct supp_pte *spte = spte_lookup (upage);
   uint8_t *kpage = palloc_get_page (PAL_USER);
 
+//  printf ("\nPage fault handler:\nfault_addr: %p\n", fault_addr);
+//  printf ("f->esp: %p\n", f->esp);
+
   /* Evict a page and bring in the faulting page in frame. */
   if (kpage == NULL) 
     {
-      PANIC ("Eviction not yet implemented");
-      //kpage = EVICT_SOME_POOR_FUCKER();
+      kpage = frame_evict ();
     }
   
   /* Supplementary page table info available from previous attempt */
@@ -238,8 +241,10 @@ page_fault (struct intr_frame *f)
         }
       else // Stack growth is only growth
         {
-          ASSERT (false);
-          kill (f);
+          //ASSERT (false);
+          //kill (f);
+          printf ("exit: Page fault failure.\n");
+          exit_handler (-1);
         }
     }
 
