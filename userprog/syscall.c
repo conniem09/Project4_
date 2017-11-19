@@ -414,7 +414,6 @@ validate_pointer (const void *pointer)
 void
 validate_buffer (const void *buffer, unsigned size, struct intr_frame *f) 
 {
-
   unsigned i;
   unsigned num_pages = size / PGSIZE;
   const void *cur_ptr = NULL;
@@ -425,10 +424,14 @@ validate_buffer (const void *buffer, unsigned size, struct intr_frame *f)
 
   if (size % PGSIZE != 0)
     num_pages++;
+ 
+  //printf ("\tStart validate_buffer for %d size buffer and %d num_pages:\n", size, num_pages);
+ // printf("buffer pointer: %p\n\n", buffer);
 
   for (i = 0; i < num_pages; i++)
     {
       cur_ptr = ((const void *) (((uint32_t) buffer) + i*PGSIZE));
+      //*cur_ptr;
       upage = pg_round_down (cur_ptr);  
       spte = spte_lookup (upage);
 
@@ -443,7 +446,8 @@ validate_buffer (const void *buffer, unsigned size, struct intr_frame *f)
 
               if (kpage == NULL)
                 {
-                  /* Need to evict a page. */
+                 /* Need to evict a page. */
+                  kpage = frame_evict ();
                 }
 
               if (spte->in_filesys)
@@ -473,7 +477,7 @@ validate_buffer (const void *buffer, unsigned size, struct intr_frame *f)
             }
           else // Stack growth is only growth
             {
-              printf("Validate buffer failure.\n");
+              //printf("Validate buffer failure.\n");
               exit_handler (-1);
             }
         }

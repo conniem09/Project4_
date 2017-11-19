@@ -112,7 +112,6 @@ set_page_filesys (struct supp_pte *spte, void *upage, void *kpage)
         }
       lock_release (&filesys_lock);
     }
-  create_fte (upage, kpage);
   memset (kpage + spte->read_bytes, 0, PGSIZE - spte->read_bytes);
 
   if (pagedir_set_page (thread_current ()->pagedir, upage, kpage, 
@@ -139,6 +138,7 @@ set_page_swap (struct supp_pte *spte, void *upage, void *kpage)
     {
       kpage = swap_read_page (spte->swap_loc, kpage);
       create_fte (upage, kpage);
+      pagedir_set_dirty (thread_current ()->pagedir, upage, true);
       spte->in_swap = false;
       return true;
     }

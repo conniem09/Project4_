@@ -10,16 +10,22 @@
 #include "vm/swap.h"
 #include "lib/debug.h"
 #include <bitmap.h>
+#include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include "vm/page.h"
 
 struct bitmap *swap_table;
+
+struct block *swap_block;
+struct lock swap_lock;
 
 void 
 swap_table_init (size_t bit_cnt)
 {
   /* Do some error checking for bitmap_create */
   swap_table = bitmap_create (bit_cnt);
+  swap_block = block_get_role (BLOCK_SWAP);
+  lock_init (&swap_lock);
 }
 
 /* Scans swap_table bitmap for free spot of PGSIZE in the swap partition,
@@ -43,7 +49,7 @@ swap_read_page (size_t swap_loc, void *kpage)
 {
   int i;
   size_t sector = swap_loc * SECTORS_PER_PAGE;
-  struct block *swap_block = block_get_role (BLOCK_SWAP);
+  //struct block *swap_block = block_get_role (BLOCK_SWAP);
   
   for (i = 0; i < SECTORS_PER_PAGE; i++)
     {
@@ -61,7 +67,7 @@ swap_write_page (size_t swap_loc, void *kpage)
 {
   int i;
   size_t sector = swap_loc * SECTORS_PER_PAGE;
-  struct block *swap_block = block_get_role (BLOCK_SWAP);
+  //struct block *swap_block = block_get_role (BLOCK_SWAP);
 
   for (i = 0; i < SECTORS_PER_PAGE; i++)
     {
@@ -81,10 +87,15 @@ check_and_write_swap (struct frame_table_entry *victim)
 {
   if (pagedir_is_dirty (victim->pd, victim->upage))
     {
+      lock_acquire (&swap_lock);
       size_t swap_loc = find_free_swap_loc ();
       swap_write_page (swap_loc, victim->kpage);
+      lock_release (&swap_lock);
+
       pagedir_clear_page (victim->pd, victim->upage);
-      spte_lookup (victim->upage)->in_swap = true;
+      struct supp_pte *spte = spte_lookup (victim->upage);
+      spte->in_swap = true;
+      spte->swap_loc = swap_loc;
       return true;
     }
   else 

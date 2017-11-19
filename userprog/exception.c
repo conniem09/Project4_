@@ -177,7 +177,7 @@ page_fault (struct intr_frame *f)
   {
     //printf("There is no writing to r/o in Pintos!\n");
     //kill (f);
-    printf("exit: !not_present\n");
+    //printf("exit: !not_present\n");
     exit_handler (-1);
   }
 
@@ -185,7 +185,7 @@ page_fault (struct intr_frame *f)
   bool success = false;
   uint8_t *upage = pg_round_down (fault_addr); 
   struct supp_pte *spte = spte_lookup (upage);
-  uint8_t *kpage = palloc_get_page (PAL_USER);
+  uint8_t *kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 
 //  printf ("\nPage fault handler:\nfault_addr: %p\n", fault_addr);
 //  printf ("f->esp: %p\n", f->esp);
@@ -227,7 +227,7 @@ page_fault (struct intr_frame *f)
             thread_current ()->syscall = false;
         }
       /* Normal stack growth - esp lowered before copying */
-      else if ((fault_addr > f->esp) && (fault_addr > STACK_LIMIT))
+      else if ((fault_addr >= f->esp) && (fault_addr > STACK_LIMIT))
         {
           success = set_page_stack (upage, kpage);
           //ASSERT (false);
@@ -241,9 +241,8 @@ page_fault (struct intr_frame *f)
         }
       else // Stack growth is only growth
         {
-          //ASSERT (false);
-          //kill (f);
-          printf ("exit: Page fault failure.\n");
+          //printf ("exit: Page fault failure.\n");
+          //printf ("\tfault_addr: %p\n\tf->esp: %p\n\n", fault_addr, f->esp);
           exit_handler (-1);
         }
     }
