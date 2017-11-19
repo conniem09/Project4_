@@ -10,6 +10,7 @@
 #define USERPROG_SYSCALL_H
 
 #include <stdbool.h>
+ #include "threads/interrupt.h"
 
 /* Connie driving now. */
 typedef int pid_t;
@@ -38,7 +39,7 @@ void close_handler (int fd);
 
 /* Error-checking functions. */
 void validate_pointer (const void *pointer);
-void validate_buffer (const void *buffer, unsigned size);
+void validate_buffer (const void *buffer, unsigned size, struct intr_frame *f);
 bool valid_fd (int fd);
 /* end of Connie driving. */
 

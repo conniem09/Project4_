@@ -131,6 +131,8 @@ struct thread
     struct hash supp_page_table;        /* Extra info about pages
                                            in page directory */
     struct semaphore spt_sema;          /* Semaphore for supp_page_table. */
+    void *esp;                          /* esp saved from syscall_handler. */
+    bool syscall;                       /* */
     /* end of Zach, Cindy, and Connie driving. */
 
     /* Owned by thread.c. */

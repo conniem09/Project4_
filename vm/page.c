@@ -8,7 +8,9 @@
  */
 #include <string.h>
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "threads/thread.h"
+#include "threads/synch.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
@@ -40,7 +42,7 @@ spte_create (void *upage, void *kpage, bool in_swap, bool in_filesys,
 	              bool stack_page, uint32_t swap_loc, struct file *file, 
 	              off_t ofs, size_t read_bytes, bool writable)
 {
-  printf("\nSTART BLOCK 3\n");
+  //printf("\nSTART BLOCK 3\n");
   struct supp_pte *new_pte;
   new_pte = malloc (sizeof (struct supp_pte));
   new_pte->upage = upage;
@@ -53,13 +55,13 @@ spte_create (void *upage, void *kpage, bool in_swap, bool in_filesys,
   new_pte->ofs = ofs;
   new_pte->writable = writable;
   new_pte->kpage = kpage;
-  //new_pte->frame_index = get_ft_index (kpage);
+  new_pte->frame_index = get_ft_index (kpage);
 
   hash_insert (&thread_current ()->supp_page_table, &new_pte->supp_elem);
 
   /* Debugging. Remove later. */
-  print_spte (spte_lookup (upage));
-  printf("\nEND BLOCK 3\n");
+  //print_spte (spte_lookup (upage));
+  //printf("\nEND BLOCK 3\n");
 }
 
 struct supp_pte *
@@ -76,9 +78,9 @@ spte_lookup (void *upage)
 
 /* Destroy thread's supplementary page table. */
 void 
-destroy_spt (void)
+destroy_spt (struct thread *t)
 {
-  hash_apply (&thread_current ()->supp_page_table, &pte_free);
+  hash_apply (&t->supp_page_table, &pte_free);
 }
 
 /* Free a supplementary page table entry. */
@@ -93,7 +95,7 @@ pte_free (struct hash_elem *e, void *aux)
 bool
 set_page_filesys (struct supp_pte *spte, void *upage, void *kpage)
 {
-  printf("\nset_page_filesys() HERE!\n");
+  //printf("\nset_page_filesys() HERE!\n");
   /* There is data to be read from the file. */
   if (spte->file != NULL)
     {
@@ -101,35 +103,23 @@ set_page_filesys (struct supp_pte *spte, void *upage, void *kpage)
       off_t ofs = spte->ofs; 
       file_seek (file, ofs);
 
+      lock_acquire (&filesys_lock);
       if (file_read (file, kpage, spte->read_bytes) != (int) spte->read_bytes)
         {
           palloc_free_page (kpage);
+          lock_release (&filesys_lock);
           return false; 
         }
+      lock_release (&filesys_lock);
     }
-  //create_fte (upage, kpage);
+  create_fte (upage, kpage);
   memset (kpage + spte->read_bytes, 0, PGSIZE - spte->read_bytes);
-      
 
   if (pagedir_set_page (thread_current ()->pagedir, upage, kpage, 
                         spte->writable)) 
     {
-      // /* There is data to be read from the file. */
-      // if (spte->file != NULL)
-      //   {
-      //     struct file *file = spte->file;
-      //     off_t ofs = spte->ofs; 
-      //     file_seek (file, ofs);
-
-      //     if (file_read (file, kpage, spte->read_bytes) != 
-      //             (int) spte->read_bytes)
-      //       {
-      //         palloc_free_page (kpage);
-      //         return false; 
-      //       }
-      //   }
-      // //create_fte (upage, kpage);
-      // memset (kpage + spte->read_bytes, 0, PGSIZE - spte->read_bytes);
+      create_fte (upage, kpage);
+      spte->in_filesys = false;
       return true;
     }
   else
@@ -148,7 +138,8 @@ set_page_swap (struct supp_pte *spte, void *upage, void *kpage)
                         spte->writable)) 
     {
       kpage = swap_read_page (spte->swap_loc, kpage);
-      //create_fte (upage, kpage);
+      create_fte (upage, kpage);
+      spte->in_swap = false;
       return true;
     }
   else
@@ -158,6 +149,28 @@ set_page_swap (struct supp_pte *spte, void *upage, void *kpage)
     }
 }
 
+/* Allocates a new stack page in the case of stack growth.
+   Returns true on success, false if allocation fails. */
+bool
+set_page_stack (void *upage, void *kpage)
+{ 
+  memset (kpage, 0, PGSIZE);
+  spte_create (upage, kpage, false, false, true, 0, NULL, 0, 0, true);
+  if (pagedir_set_page (thread_current ()->pagedir, upage, kpage, true)) 
+    {
+      create_fte (upage, kpage);
+      struct supp_pte *spte = spte_lookup (upage);
+      spte->stack_page = true;
+      return true;
+    }
+  else
+    {
+      palloc_free_page (kpage);
+      return false;
+    }
+}
+
+
 void 
 print_spte (struct supp_pte *spte)
 {
@@ -166,15 +179,15 @@ print_spte (struct supp_pte *spte)
       printf ("You done fucked up somehow.\n");
       return;
     }
-  printf ("upage: %p\n", spte->upage);
-  printf ("kpage: %p\n", spte->kpage);
-  printf ("in_swap: %d\n", spte->in_swap);
-  printf ("in_filesys: %d\n", spte->in_filesys);
-  printf ("stack_page: %d\n", spte->stack_page);
-  printf ("swap_loc: %d\n", spte->swap_loc);
-  printf ("read_bytes: %d\n", spte->read_bytes);
-  printf ("file: %p\n", spte->file);
-  printf ("ofs: %d\n", spte->ofs);
-  printf ("writable: %d\n\n", spte->writable);
+  // printf ("upage: %p\n", spte->upage);
+  // printf ("kpage: %p\n", spte->kpage);
+  // printf ("in_swap: %d\n", spte->in_swap);
+  // printf ("in_filesys: %d\n", spte->in_filesys);
+  // printf ("stack_page: %d\n", spte->stack_page);
+  // printf ("swap_loc: %d\n", spte->swap_loc);
+  // printf ("read_bytes: %d\n", spte->read_bytes);
+  // printf ("file: %p\n", spte->file);
+  // printf ("ofs: %d\n", spte->ofs);
+  // printf ("writable: %d\n\n", spte->writable);
 }
 

@@ -181,6 +181,8 @@ process_exit (void)
       sema_up (&cur->parent_wait_sema);
       sema_down (&cur->child_exit_sema);
       //sema_down (&cur->spt_sema);
+      remove_all_fte (cur);
+      destroy_spt (cur);
     }
 }
 /* end of Zach and Connie driving. */
@@ -520,6 +522,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+      /* This motherfucker. The offset in the 
+         file was previously being 
+         implicitly modified by file_seek, 
+         but we don't call file_seek in 
+         load_segment anymore, so... */
+      ofs += page_read_bytes;
     }
   return true;
 }
@@ -547,16 +555,14 @@ setup_stack (void **esp, const char *cmdline)
   int arg_iterator;
   uint32_t i;
 
-  printf("\nSTART BLOCK 2\n");
-
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success) 
         {
-          //spte_create (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, false, false, 
-                       //true, 0, NULL, 0, 0, false);
+          spte_create (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, false, false, 
+                       true, 0, NULL, 0, 0, true);
 
           *esp = PHYS_BASE;
           strlcpy (buf, cmdline, sizeof (local_copy));
@@ -572,7 +578,7 @@ setup_stack (void **esp, const char *cmdline)
             {
               arg_size = strlen (parsed[arg_iterator]) + 1;
               *esp -= arg_size;
-              validate_pointer (*esp);
+              //validate_pointer (*esp);
               memcpy (*esp, parsed[arg_iterator], arg_size);
               arg_addresses[arg_iterator] = *esp;
             }
@@ -584,11 +590,11 @@ setup_stack (void **esp, const char *cmdline)
               for (i = 0; i < before_word_align; i++)
                 *esp -= 1; 
             }
-          validate_pointer (*esp);
+          // validate_pointer (*esp);
 
           /* Check for stack overflow. */
-          predicted_esp = *esp - (argc + 4) * 4;
-          validate_pointer (predicted_esp);
+          // predicted_esp = *esp - (argc + 4) * 4;
+          // validate_pointer (predicted_esp);
          
           /* Null sentinel. */
           *esp -= sizeof (char *);
@@ -609,11 +615,11 @@ setup_stack (void **esp, const char *cmdline)
           /* Push on a fake return address. */
           *esp -= sizeof (void *);
           memcpy (*esp, &null_pointer, sizeof (void *));
+          // printf ("\nesp after command-line args: %p\n", *esp);
         }
       else
         palloc_free_page (kpage);
     }
-    printf("\nEND BLOCK 2\n");
   return success;
 }
 /* end of Cindy, Zach, and Connie driving. */

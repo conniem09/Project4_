@@ -11,10 +11,10 @@
 #include <stdlib.h>
 #include <syscall-nr.h>
 #include <string.h>
-#include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "threads/palloc.h"
 #include "pagedir.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
@@ -23,6 +23,8 @@
 #include "filesys/file.h"
 #include "filesys/off_t.h"
 #include "lib/kernel/list.h"
+#include "vm/page.h"
+#include "vm/swap.h"
 
 #define MAX_ARGS 3
 #define FD_START 2
@@ -42,6 +44,10 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
+  // printf("\nsyscall esp: %p\n\n", f->esp);
+  thread_current ()->esp = f->esp;
+  thread_current ()->syscall= true;
+
   int arguments[MAX_ARGS];
   validate_pointer ((const void *) f->esp);
 
@@ -86,13 +92,13 @@ syscall_handler (struct intr_frame *f)
         break;
       case SYS_READ :
         get_arg (arguments, f->esp, 3);
-        validate_buffer ((const void *) arguments[1], arguments[2]);
+        validate_buffer ((const void *) arguments[1], arguments[2], f);
         f-> eax = read_handler ((int) arguments[0], (void *) arguments[1], 
                                 (unsigned) arguments[2]);
         break;
       case SYS_WRITE :
         get_arg (arguments, f->esp, 3);
-        validate_buffer ((const void *) arguments[1], arguments[2]);
+        validate_buffer ((const void *) arguments[1], arguments[2], f);
         f->eax = write_handler ((int) arguments[0], 
                                 (const void *) arguments[1], 
                                 (unsigned) arguments[2]);
@@ -396,12 +402,8 @@ close_handler (int fd)
 void 
 validate_pointer (const void *pointer)
 {
-  if (pointer == NULL)
-    printf("HEEEEEERE %p\n");
-  if (pointer == NULL || is_kernel_vaddr (pointer) /*|| 
-      pagedir_get_page (thread_current ()->pagedir, pointer) == NULL*/)
+  if (pointer == NULL || is_kernel_vaddr (pointer) || pointer < CODE_SEG_START)
   {
-    printf("Here! too lazy for decent printf statements anymroe\n");
     exit_handler (-1);
   }
 }
@@ -409,18 +411,73 @@ validate_pointer (const void *pointer)
 /* Checks if a buffer passed in is valid. 
    If not, the running process is terminated. */
 void
-validate_buffer (const void *buffer, unsigned size) 
+validate_buffer (const void *buffer, unsigned size, struct intr_frame *f) 
 {
 
   unsigned i;
   unsigned num_pages = size / PGSIZE;
+  const void *cur_ptr = NULL;
+  uint8_t *upage = NULL;
+  struct supp_pte *spte = NULL;
+  uint8_t *kpage = NULL;
+  bool success = false;
 
   if (size % PGSIZE != 0)
     num_pages++;
 
   for (i = 0; i < num_pages; i++)
-    validate_pointer ((const void *) (((uint32_t) buffer) + i*PGSIZE));
+    {
+      cur_ptr = ((const void *) (((uint32_t) buffer) + i*PGSIZE));
+      upage = pg_round_down (cur_ptr);  
+      spte = spte_lookup (upage);
 
+      if (spte != NULL)
+        {
+          if (!spte->writable)
+              exit_handler (-1);
+          /* If not in-frame. */
+          if (spte->in_filesys || spte->in_swap)
+            {
+              kpage = palloc_get_page (PAL_USER);
+
+              if (kpage == NULL)
+                {
+                  /* Need to evict a page. */
+                }
+
+              if (spte->in_filesys)
+                success = set_page_filesys (spte, upage, kpage);
+              else if (spte->in_swap)
+                success = set_page_swap (spte, upage, kpage);
+              if (!success)
+                exit_handler (-1);
+            }
+        }
+      else
+        {
+          if (cur_ptr > f->esp)
+            {
+              // printf ("\nRegular stack growth:\n");
+              // printf("fault_addr: %p\n", cur_ptr);
+              // printf("esp: %p\n", f->esp);
+              kpage = palloc_get_page (PAL_USER);
+              //printf("kpage: %p\n", kpage);
+
+              success = set_page_stack (upage, kpage);
+              //ASSERT(false);
+            }
+          else if (cur_ptr == (f->esp - (4 /*/ sizeof (void *)*/)) || 
+                   cur_ptr == (f->esp - (32 /*/ sizeof (void *)*/)))
+            {
+              success = set_page_stack (upage, kpage);
+            }
+          else // Stack growth is only growth
+            {
+              exit_handler (-1);
+            }
+        }
+      validate_pointer (cur_ptr);
+    }
 }
 
 /* Checks if fd is in range of array. If not, return false. */

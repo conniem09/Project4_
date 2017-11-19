@@ -37,7 +37,7 @@ unsigned pt_hash_func (const struct hash_elem *element, void *aux);
 bool pt_less_func (const struct hash_elem *a, const struct hash_elem *b, 
 	void *aux);
 struct supp_pte *spte_lookup (void *upage);
-void destroy_spt (void);
+void destroy_spt (struct thread *t);
 void pte_free (struct hash_elem *e, void *aux);
 
 void spte_create (void *upage, void *kpage, bool in_swap, bool in_filesys, 
@@ -46,6 +46,7 @@ void spte_create (void *upage, void *kpage, bool in_swap, bool in_filesys,
 
 bool set_page_filesys (struct supp_pte *spte, void *upage, void *kpage);
 bool set_page_swap (struct supp_pte *spte, void *upage, void *kpage);
+bool set_page_stack (void *upage, void *kpage);
 void print_spte (struct supp_pte *spte);
 
 #endif /* vm/page.h */

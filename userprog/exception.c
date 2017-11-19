@@ -21,6 +21,9 @@
 #include "vm/page.h"
 #include "vm/frame.h"
 
+/* Stack can only grow 8MB past PHYS_BASE */
+#define STACK_LIMIT PHYS_BASE - 8*1024*1024
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -164,25 +167,24 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  printf("fucking faulting address %p\n", fault_addr);
-  printf("esp I guess because cn't turst anything anoymofeabl %p\n", f->esp);
   validate_pointer (fault_addr);
-  // //validate_pointer (f->esp);
+  // if (!thread_current ()->syscall)
+  //   validate_pointer (f->esp);
+  // else
+  //   validate_pointer(thread_current ()->
 
-  // if (!not_present)
-  // {
-  //   printf("There is no writing to r/o in Pintos!\n");
-  //   kill (f);
-  // }
+  if (!not_present)
+  {
+    //printf("There is no writing to r/o in Pintos!\n");
+    //kill (f);
+    exit_handler (-1);
+  }
 
-  printf("Yeeeehaaahhh BLOCK 1\n");
   /* Demand page for faulting address. */
   bool success = false;
-  uint8_t *upage = pg_round_down (fault_addr);  
+  uint8_t *upage = pg_round_down (fault_addr); 
   struct supp_pte *spte = spte_lookup (upage);
   uint8_t *kpage = palloc_get_page (PAL_USER);
-
-  printf("END BLOCK 1\n\n");
 
   /* Evict a page and bring in the faulting page in frame. */
   if (kpage == NULL) 
@@ -190,79 +192,58 @@ page_fault (struct intr_frame *f)
       PANIC ("Eviction not yet implemented");
       //kpage = EVICT_SOME_POOR_FUCKER();
     }
-
-  printf("\nSTART BLOCK 4\n");
-
-  printf("************************** MAPPING %p\n", upage);
-  printf("************************** MAPPING TO %p\n", kpage);
-  printf("\n");
   
-  if (spte != NULL) /* Supplementary page table info available from previous attempt */
+  /* Supplementary page table info available from previous attempt */
+  if (spte != NULL) 
     {
       if (spte->in_filesys)
         {
           success = set_page_filesys (spte, upage, kpage);
-          printf("set_page_filesys success: %d\n", success);
+          //printf("set_page_filesys success: %d\n", success);
         }
       else if (spte->in_swap)
         {
           success = set_page_swap (spte, upage, kpage);
         }
-      // /* Fill in the frame */
-      // if (pagedir_set_page (thread_current ()->pagedir, upage, kpage, true)) 
-      //   {
-      //     create_fte (upage, kpage);
-      //     if (supp_pte->in_filesys)
-      //       {
-      //         // There is data to be read
-      //         if (supp_pte->file != NULL)
-      //           {
-      //             struct file *file = supp_pte->file;
-      //             off_t ofs = supp_pte->ofs; 
-      //             file_seek (file, ofs);
-      //             if (file_read (file, kpage, supp_pte->page_read_bytes) != 
-      //               (int) supp_pte->page_read_bytes)
-      //               {
-      //                 palloc_free_page (kpage);
-      //                 free (frame_table[get_ft_index (kpage)]); 
-      //                 frame_table[get_ft_index (kpage)] = NULL;
-      //                 kill (f); 
-      //               }
-      //           }
-      //         if (!install_page (upage, kpage, writable)) 
-      //           {
-      //             palloc_free_page (kpage);
-      //             free (frame_table[get_ft_index (kpage)]); 
-      //             frame_table[get_ft_index (kpage)] = NULL;
-      //             kill (f); 
-      //           }
-      //         memset (kpage + supp_pte->page_read_bytes, 0, 
-      //               PGSIZE-supp_pte->read_bytes);
-      //       }
-      //   }
 
       if (!success)
         {
           kill (f);
         }
     }
-  else  /* First attempt to use this virtual page - stackax */
+  /* First attempt to use this virtual page - stack growth */
+  else  
     {
-      if (fault_addr == (f->esp - (4 / sizeof (void *))) || 
-            fault_addr == (f->esp - (32 / sizeof (void *))))
+      if (thread_current ()->syscall)
         {
-          printf("Stack thing here\n");
-          //STEP BACK OFF THE FUCKING STACK 
+          bool is_stack_access = (fault_addr > STACK_LIMIT);
+          if (is_stack_access)
+            {
+              success = set_page_stack (upage, kpage);
+            }
+            thread_current ()->syscall = false;
+        }
+      /* Normal stack growth - esp lowered before copying */
+      else if ((fault_addr > f->esp) && (fault_addr > STACK_LIMIT))
+        {
+          success = set_page_stack (upage, kpage);
+          //ASSERT (false);
+        }
+      /* Push or pusha instructions - they check permission, so esp above */
+      else if (fault_addr == (f->esp - 4) || fault_addr == (f->esp - 32))
+        {
+
+          success = set_page_stack (upage, kpage);
+          //ASSERT (false);
         }
       else // Stack growth is only growth
         {
           ASSERT (false);
           kill (f);
         }
-      printf ("Down here in else land\n");
     }
 
-  printf("\nEND BLOCK 4\n");
+  //printf("\nEND BLOCK 4\n");
 
   // /* To implement virtual memory, delete the rest of the function
   //    body, and replace it with code that brings in the page to
@@ -278,4 +259,6 @@ page_fault (struct intr_frame *f)
   // kill (f);
 
 }
+
+
 
