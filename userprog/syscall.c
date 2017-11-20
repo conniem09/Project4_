@@ -4,7 +4,7 @@
  * Partner 1: Connie Chen, connie
  * Partner 2: Cindy Truong, cqtruong
  * Partner 3: Zachary King, zacragu
- * Date: 10/27/17
+ * Date: 11/19/17
  */
 #include "userprog/syscall.h"
 #include <stdio.h>
@@ -44,8 +44,6 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  // printf("\nsyscall esp: %p\n\n", f->esp);
-  thread_current ()->esp = f->esp;
   thread_current ()->syscall= true;
 
   int arguments[MAX_ARGS];
@@ -73,6 +71,7 @@ syscall_handler (struct intr_frame *f)
       case SYS_CREATE :
         get_arg (arguments, f->esp, 2);
         validate_pointer ((const void *) arguments[0]);
+        validate_src ((const void *) arguments[0], 1);
         f->eax = create_handler ((const char *) arguments[0], 
                                  (unsigned) arguments[1]);
         break;
@@ -84,6 +83,7 @@ syscall_handler (struct intr_frame *f)
       case SYS_OPEN :
         get_arg (arguments, f->esp, 1);
         validate_pointer ((const void *) arguments[0]);
+        validate_src ((const void *) arguments[0], 1);
         f->eax = open_handler ((const char *) arguments[0]);
         break;
       case SYS_FILESIZE :
@@ -93,6 +93,7 @@ syscall_handler (struct intr_frame *f)
       case SYS_READ :
         get_arg (arguments, f->esp, 3);
         validate_buffer ((const void *) arguments[1], arguments[2], f);
+        validate_src ((const void *) arguments[1], arguments[2]);
         f-> eax = read_handler ((int) arguments[0], (void *) arguments[1], 
                                 (unsigned) arguments[2]);
         break;
@@ -402,11 +403,27 @@ close_handler (int fd)
 void 
 validate_pointer (const void *pointer)
 {
-  if (pointer == NULL || is_kernel_vaddr (pointer)/* || pointer < CODE_SEG_START*/)
-  {
-//    printf("In validate pointer: %p\n", pointer);
+  if (pointer == NULL || is_kernel_vaddr (pointer))
     exit_handler (-1);
-  }
+}
+
+/* Checks if pointer to page that was never written to 
+     is going to be read from. */
+void 
+validate_src (const void *pointer, unsigned size)
+{
+  unsigned num_pages = size / PGSIZE;
+  if (size % PGSIZE != 0)
+    num_pages++;
+  const void *cur_ptr = NULL;
+  int i;
+
+  for (i = 0; i < num_pages; i++)
+    {
+      cur_ptr = ((const void *) (((uint32_t) pointer) + i*PGSIZE));
+      if (spte_lookup (pg_round_down (pointer), thread_current ()) == NULL)
+        exit_handler (-1);
+    }
 }
 
 /* Checks if a buffer passed in is valid. 
@@ -421,67 +438,57 @@ validate_buffer (const void *buffer, unsigned size, struct intr_frame *f)
   struct supp_pte *spte = NULL;
   uint8_t *kpage = NULL;
   bool success = false;
+  struct thread *cur = thread_current ();
 
   if (size % PGSIZE != 0)
     num_pages++;
- 
-  //printf ("\tStart validate_buffer for %d size buffer and %d num_pages:\n", size, num_pages);
- // printf("buffer pointer: %p\n\n", buffer);
 
   for (i = 0; i < num_pages; i++)
     {
       cur_ptr = ((const void *) (((uint32_t) buffer) + i*PGSIZE));
-      //*cur_ptr;
       upage = pg_round_down (cur_ptr);  
-      spte = spte_lookup (upage);
+      spte = spte_lookup (upage, thread_current ());
 
+      validate_pointer (cur_ptr);
+      lock_acquire (&cur->frame_access_lock);
       if (spte != NULL)
         {
           if (!spte->writable)
               exit_handler (-1);
+
           /* If not in-frame. */
           if (spte->in_filesys || spte->in_swap)
             {
               kpage = palloc_get_page (PAL_USER);
 
               if (kpage == NULL)
-                {
-                 /* Need to evict a page. */
-                  kpage = frame_evict ();
-                }
+                kpage = frame_evict ();
 
               if (spte->in_filesys)
                 success = set_page_filesys (spte, upage, kpage);
               else if (spte->in_swap)
                 success = set_page_swap (spte, upage, kpage);
               if (!success)
-                exit_handler (-1);
+                {
+                  lock_release (&cur->frame_access_lock);
+                  exit_handler (-1);
+                }
             }
         }
       else
         {
           if (cur_ptr > f->esp)
             {
-              // printf ("\nRegular stack growth:\n");
-              // printf("fault_addr: %p\n", cur_ptr);
-              // printf("esp: %p\n", f->esp);
               kpage = palloc_get_page (PAL_USER);
-              //printf("kpage: %p\n", kpage);
-
-              success = set_page_stack (upage, kpage);
-              //ASSERT(false);
-            }
-          else if (cur_ptr == (f->esp - 4) || cur_ptr == (f->esp - 32))
-            {
               success = set_page_stack (upage, kpage);
             }
-          else // Stack growth is only growth
+          else 
             {
-              //printf("Validate buffer failure.\n");
+              lock_release (&cur->frame_access_lock);
               exit_handler (-1);
             }
         }
-      validate_pointer (cur_ptr);
+      lock_release (&cur->frame_access_lock);
     }
 }
 

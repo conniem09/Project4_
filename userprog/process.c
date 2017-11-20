@@ -4,7 +4,7 @@
  * Partner 1: Connie Chen, connie
  * Partner 2: Cindy Truong, cqtruong
  * Partner 3: Zachary King, zacragu
- * Date: 10/27/17
+ * Date: 11/19/17
  */
 #include "userprog/process.h"
 #include <debug.h>
@@ -75,10 +75,11 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /* Cindy is most definitely not driving here */
+  /* Cindy is driving now. */
   thread_current ()->parent->load_success = success;
   sema_up (&thread_current ()->parent->exec_sema);
-
+  /* end of Cindy driving. */
+ 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -131,7 +132,7 @@ process_wait (tid_t child_tid)
   sema_down (&child->parent_wait_sema);
   int status = child->exit_status;
   /* Allow child to die. */
-  list_remove(&child->child_elem);
+  list_remove (&child->child_elem);
   sema_up (&child->child_exit_sema);
   
   return status;
@@ -180,7 +181,8 @@ process_exit (void)
     {
       sema_up (&cur->parent_wait_sema);
       sema_down (&cur->child_exit_sema);
-      //sema_down (&cur->spt_sema);
+      
+      /* Reclaim frames and destroy supplementary page table. */
       remove_all_fte (cur);
       destroy_spt (cur);
     }
@@ -489,44 +491,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      /* Get a page of memory. */
-      // uint8_t *kpage = palloc_get_page (PAL_USER);
-      // if (kpage == NULL)
-      //   {
-      //     return false;
-      //   }
-
-      // /* Load this page. */
-      // if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-      //   {
-      //     palloc_free_page (kpage);
-      //     return false; 
-      //   }
-      // memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      // /* Add the page to the process's address space. */
-      // if (!install_page (upage, kpage, writable)) 
-      //   {
-      //     palloc_free_page (kpage);
-      //     return false; 
-      //   }
         
+      /* Connie is driving now. */  
       if (page_zero_bytes != PGSIZE)
         spte_create (upage, NULL, false, true, false, 0, file, ofs, 
           page_read_bytes, writable);
       else 
         spte_create (upage, NULL, false, true, false, 0, NULL, 0, 0, writable);   
+      /* end of Connie driving. */
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
-      /* This motherfucker. The offset in the 
-         file was previously being 
-         implicitly modified by file_seek, 
-         but we don't call file_seek in 
-         load_segment anymore, so... */
       ofs += page_read_bytes;
     }
   return true;
@@ -548,9 +525,7 @@ setup_stack (void **esp, const char *cmdline)
   char *token = NULL;                   /* Argument token. */
   int argc = 0;                         /* Number of arguments. */
   size_t arg_size = 0;                  /* Size of each argument. */
-  void *predicted_esp = NULL;           /* Predicted end esp for checking
-                                          stack overflow. */
-  uint32_t before_word_align;
+  uint32_t before_word_align;           
   char null_pointer = 0;
   int arg_iterator;
   uint32_t i;
@@ -578,7 +553,6 @@ setup_stack (void **esp, const char *cmdline)
             {
               arg_size = strlen (parsed[arg_iterator]) + 1;
               *esp -= arg_size;
-              //validate_pointer (*esp);
               memcpy (*esp, parsed[arg_iterator], arg_size);
               arg_addresses[arg_iterator] = *esp;
             }
@@ -590,11 +564,6 @@ setup_stack (void **esp, const char *cmdline)
               for (i = 0; i < before_word_align; i++)
                 *esp -= 1; 
             }
-          // validate_pointer (*esp);
-
-          /* Check for stack overflow. */
-          // predicted_esp = *esp - (argc + 4) * 4;
-          // validate_pointer (predicted_esp);
          
           /* Null sentinel. */
           *esp -= sizeof (char *);
@@ -615,7 +584,6 @@ setup_stack (void **esp, const char *cmdline)
           /* Push on a fake return address. */
           *esp -= sizeof (void *);
           memcpy (*esp, &null_pointer, sizeof (void *));
-          // printf ("\nesp after command-line args: %p\n", *esp);
         }
       else
         palloc_free_page (kpage);

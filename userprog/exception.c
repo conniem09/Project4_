@@ -4,7 +4,7 @@
  * Partner 1: Connie Chen, connie
  * Partner 2: Cindy Truong, cqtruong
  * Partner 3: Zachary King, zacragu
- * Date: 10/27/17
+ * Date: 11/19/17
  */
 
 #include "userprog/exception.h"
@@ -13,9 +13,9 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "userprog/syscall.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
+#include "userprog/syscall.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 #include "vm/page.h"
@@ -167,102 +167,63 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+
+  /* Connie, Cindy, and Zachary drove here. */
   validate_pointer (fault_addr);
-  // if (!thread_current ()->syscall)
-  //   validate_pointer (f->esp);
-  // else
-  //   validate_pointer(thread_current ()->
 
   if (!not_present)
-  {
-    //printf("There is no writing to r/o in Pintos!\n");
-    //kill (f);
-    //printf("exit: !not_present\n");
     exit_handler (-1);
-  }
 
   /* Demand page for faulting address. */
   bool success = false;
+  struct thread *cur = thread_current ();
   uint8_t *upage = pg_round_down (fault_addr); 
-  struct supp_pte *spte = spte_lookup (upage);
-  uint8_t *kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  struct supp_pte *spte = spte_lookup (upage, cur);
 
-//  printf ("\nPage fault handler:\nfault_addr: %p\n", fault_addr);
-//  printf ("f->esp: %p\n", f->esp);
+  lock_acquire (&cur->frame_access_lock);
+  uint8_t *kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 
   /* Evict a page and bring in the faulting page in frame. */
   if (kpage == NULL) 
-    {
-      kpage = frame_evict ();
-    }
+    kpage = frame_evict ();
   
   /* Supplementary page table info available from previous attempt */
   if (spte != NULL) 
     {
       if (spte->in_filesys)
-        {
-          success = set_page_filesys (spte, upage, kpage);
-          //printf("set_page_filesys success: %d\n", success);
-        }
+        success = set_page_filesys (spte, upage, kpage);
       else if (spte->in_swap)
-        {
-          success = set_page_swap (spte, upage, kpage);
-        }
-
+        success = set_page_swap (spte, upage, kpage);
       if (!success)
         {
+          lock_release (&cur->frame_access_lock);
           kill (f);
         }
     }
   /* First attempt to use this virtual page - stack growth */
   else  
     {
-      if (thread_current ()->syscall)
+      if (!write)
+        exit_handler(-1);  
+      if (cur->syscall)
         {
           bool is_stack_access = (fault_addr > STACK_LIMIT);
           if (is_stack_access)
-            {
-              success = set_page_stack (upage, kpage);
-            }
-            thread_current ()->syscall = false;
+            success = set_page_stack (upage, kpage);
+          cur->syscall = false;
         }
       /* Normal stack growth - esp lowered before copying */
-      else if ((fault_addr >= f->esp) && (fault_addr > STACK_LIMIT))
-        {
-          success = set_page_stack (upage, kpage);
-          //ASSERT (false);
-        }
+      else if ((fault_addr > f->esp) && (fault_addr > STACK_LIMIT))
+        success = set_page_stack (upage, kpage);
       /* Push or pusha instructions - they check permission, so esp above */
       else if (fault_addr == (f->esp - 4) || fault_addr == (f->esp - 32))
+        success = set_page_stack (upage, kpage);
+      else
         {
-
-          success = set_page_stack (upage, kpage);
-          //ASSERT (false);
-        }
-      else // Stack growth is only growth
-        {
-          //printf ("exit: Page fault failure.\n");
-          //printf ("\tfault_addr: %p\n\tf->esp: %p\n\n", fault_addr, f->esp);
+          lock_release (&cur->frame_access_lock);
           exit_handler (-1);
         }
     }
-
-  //printf("\nEND BLOCK 4\n");
-
-  // /* To implement virtual memory, delete the rest of the function
-  //    body, and replace it with code that brings in the page to
-  //    which fault_addr refers. */
-  // printf ("Page fault at %p: %s error %s page in %s context.\n",
-  //         fault_addr,
-  //         not_present ? "not present" : "rights violation",
-  //         write ? "writing" : "reading",
-  //         user ? "user" : "kernel");
-
-  // printf("There is no crying in Pintos!\n");
-
-  // kill (f);
-
+  lock_release (&cur->frame_access_lock);
 }
-
-
-
+/* End of Connie, Cindy, and Zachary driving. */

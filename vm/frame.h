@@ -3,8 +3,7 @@
  * Partner 1: Connie Chen, connie
  * Partner 2: Cindy Truong, cqtruong
  * Partner 3: Zachary King, zacragu
- * Date: 
-
+ * Date: 11/19/17
 */
 
 #ifndef VM_FRAME_H
@@ -22,15 +21,16 @@ struct frame_table_entry **frame_table;
 /* Frame table entry. */
 struct frame_table_entry 
 {
-  struct thread *owner;
-  uint32_t *pd;
-  void *upage;
+  struct thread *owner;        /* Owner of the frame. */
+  uint32_t *pd;                /* Owner's page directory. */
+  void *upage;                 
   void *kpage;
   bool pinned;
 };
 
 void frame_table_init (void);
 void create_fte (void *upage, void *kpage);
+void destroy_fte (int ft_index);
 void remove_all_fte (struct thread *dying);
 
 /* Functions for eviction. */

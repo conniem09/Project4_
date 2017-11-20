@@ -4,7 +4,7 @@
  * Partner 1: Connie Chen, connie
  * Partner 2: Cindy Truong, cqtruong
  * Partner 3: Zachary King, zacragu
- * Date: 10/27/17
+ * Date: 11/19/17
  */
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
@@ -39,6 +39,7 @@ void close_handler (int fd);
 
 /* Error-checking functions. */
 void validate_pointer (const void *pointer);
+void validate_src (const void *pointer, unsigned size);
 void validate_buffer (const void *buffer, unsigned size, struct intr_frame *f);
 bool valid_fd (int fd);
 /* end of Connie driving. */

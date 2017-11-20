@@ -125,14 +125,13 @@ struct thread
 
     bool load_success;                  /* Success/failure status of load. */
     struct semaphore exec_sema;         /* Wait for load success status. */
-
     struct file *open_files[MAX_FD_COUNT];  /* Process's open files. 
                                                Index through fd. */  
+    
     struct hash supp_page_table;        /* Extra info about pages
                                            in page directory */
-    struct semaphore spt_sema;          /* Semaphore for supp_page_table. */
-    void *esp;                          /* esp saved from syscall_handler. */
-    bool syscall;                       /* */
+    bool syscall;                       /* Thread is in a syscall. */
+    struct lock frame_access_lock;      /* Prevents eviction during fault. */
     /* end of Zach, Cindy, and Connie driving. */
 
     /* Owned by thread.c. */

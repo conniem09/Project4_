@@ -3,8 +3,7 @@
  * Partner 1: Connie Chen, connie
  * Partner 2: Cindy Truong, cqtruong
  * Partner 3: Zachary King, zacragu
- * Date: 
-
+ * Date: 11/19/17
 */
 #include "vm/frame.h"
 #include <stdio.h>
@@ -15,23 +14,35 @@
 #include "userprog/pagedir.h"
 #include "vm/swap.h"
 
+/* Global frame table lock. */
 struct lock ft_lock;
 
+/* "Clock pointer" - frame table index that the "clock hand"
+   is "pointing" to for the frame table. 
+   Used for page replacement algorithm. */
 int clock_hand;
 
-void frame_table_init (void)
+/* Initialize the global frame table. */
+void 
+frame_table_init (void)
 {
   clock_hand = 0;
   lock_init (&ft_lock);
   frame_table = malloc (NUM_USR_FRAMES * sizeof (struct frame_table_entry));
+  if (frame_table == NULL)
+    exit_handler (-1);
 }
 
+/* Cindy driving */
 /* Create new frame table entry and adds it to the frame table. */
-void create_fte (void *upage, void *kpage)
+void 
+create_fte (void *upage, void *kpage)
 { 
   struct frame_table_entry *new_entry;
 
   new_entry = malloc (sizeof (struct frame_table_entry));
+  if (new_entry == NULL)
+    exit_handler (-1);
   new_entry->owner = thread_current ();
   new_entry->pd = thread_current ()->pagedir;
   new_entry->upage = upage;
@@ -42,9 +53,21 @@ void create_fte (void *upage, void *kpage)
   frame_table[get_ft_index (kpage)] = new_entry;
   lock_release (&ft_lock);
 }
+/* end Cindy driving */
+
+/* Connie driving */
+/* Frees a frame table entry and removes it from the
+   frame table. */
+void
+destroy_fte (int ft_index)
+{
+  free (frame_table[ft_index]);
+  frame_table[ft_index] = NULL;
+}
 
 /* Remove all of a dying process's frame table entries. */
-void remove_all_fte (struct thread *dying)
+void 
+remove_all_fte (struct thread *dying)
 {
   lock_acquire (&ft_lock);
   int ft_index;
@@ -53,22 +76,20 @@ void remove_all_fte (struct thread *dying)
       if (frame_table[ft_index] != NULL) 
         {
           if (frame_table[ft_index]->owner == dying)
-            {
-              free (frame_table[ft_index]);
-              frame_table[ft_index] = NULL;
-            }
+            destroy_fte (ft_index);
         }
     }
   lock_release (&ft_lock);
 }
+/* end of Connie's driving */
 
+/* Zachary driving */
 /* Choose a victim frame to evict using the clock page
    replacement algorithm.
    Returns victim frame table entry. */
 struct frame_table_entry *
 choose_victim (void)
 {
-  lock_acquire (&ft_lock);
   bool victim_found = false;
   struct frame_table_entry *victim = NULL;
 
@@ -93,28 +114,38 @@ choose_victim (void)
       if (clock_hand >= NUM_USR_FRAMES)
         clock_hand = 0;
     }
-  lock_release (&ft_lock);
   return victim;
 }
+/* end of Zachary driving */
 
+/* Cindy driving */
 /* Evicts a frame using the clock page replacement algorithm.
    Returns the kernel virtual address of the now free frame. */
 void *
 frame_evict (void)
 {
+  lock_acquire (&ft_lock);
   struct frame_table_entry *victim = choose_victim ();
   void *kpage = victim->kpage;
-  check_and_write_swap (victim);
-  pagedir_clear_page (victim->pd, victim->upage);
+  struct thread *victim_owner = victim->owner;
 
-  lock_acquire (&ft_lock);
-  free (victim);
-  frame_table[get_ft_index (kpage)] = NULL;
+  /* Prevent owner of evicted frame from atttempting to 
+     reclaim the page during frame eviction. */
+  if (!(victim_owner == thread_current ()))
+    lock_acquire (&victim->owner->frame_access_lock);
+  
+  pagedir_clear_page (victim->pd, victim->upage);
+  check_and_write_swap (victim);
+  destroy_fte (get_ft_index (kpage));
+  
+  if (!(victim_owner == thread_current ()))
+    lock_release (&victim->owner->frame_access_lock);
   lock_release (&ft_lock);
   return kpage;
 }
+/* end of Cindy driving */
 
-
+/* Connie driving */
 /* For debugging. Eventually. At some point. Maybe? 
    I'm tired of debugging. */
 void print_frame_table (void)
@@ -134,3 +165,4 @@ void print_frame_table (void)
       fte = frame_table[frame_table_index];
     }
 }
+/* end of Connie driving */
