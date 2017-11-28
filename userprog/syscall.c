@@ -381,8 +381,61 @@ close_handler (int fd)
   file_close (cur->open_files[fd]);
   cur->open_files[fd] = NULL;
   lock_release (&filesys_lock);
-} 
+}  
 /* end of Connie driving. */
+
+/* 
+Changes the current working directory of the process to dir, 
+which may be relative or absolute. Returns true if successful, false on failure. 
+*/
+bool chdir_handler (const char *dir)
+{
+
+}
+
+/*
+Creates the directory named dir, which may be relative or absolute. 
+Returns true if successful, false on failure. Fails if dir already 
+exists or if any directory name in dir, besides the last, does not 
+already exist. That is, mkdir("/a/b/c") succeeds only if "/a/b" 
+already exists and "/a/b/c" does not. 
+*/
+bool mkdir_handler (const char *dir)
+{
+
+}
+
+/*
+Reads a directory entry from file descriptor fd, which must represent a 
+directory. If successful, stores the null-terminated file name in name, 
+which must have room for READDIR_MAX_LEN + 1 bytes, and returns true. 
+If no entries are left in the directory, returns false. 
+*/
+bool readdir_handler (int fd, char *name)
+{
+
+}
+
+/*
+Returns true if fd represents a directory, false if it represents 
+an ordinary file. 
+*/
+bool isdir_handler (int fd)
+{
+
+}
+
+/*
+Returns the inode number of the inode associated with fd, which may 
+represent an ordinary file or a directory.
+An inode number persistently identifies a file or directory. 
+It is unique during the file's existence. In Pintos, the sector 
+number of the inode is suitable for use as an inode number. 
+*/
+int inumber_handler (int fd)
+{
+  
+}
 
 /* Zach and Cindy drove here. */
 /* Checks if a pointer passed in is a null pointer, a pointer

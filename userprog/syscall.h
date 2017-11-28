@@ -36,6 +36,12 @@ void seek_handler (int fd, unsigned position);
 unsigned tell_handler (int fd);
 void close_handler (int fd);
 
+bool chdir_handler (const char *dir);
+bool mkdir_handler (const char *dir);
+bool readdir_handler (int fd, char *name);
+bool isdir_handler (int fd);
+int inumber_handler (int fd);
+
 /* Error-checking functions. */
 void validate_pointer (const void *pointer);
 void validate_buffer (const void *buffer, unsigned size);

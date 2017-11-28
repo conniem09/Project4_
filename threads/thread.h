@@ -125,6 +125,7 @@ struct thread
 
     struct file *open_files[MAX_FD_COUNT];  /* Process's open files. 
                                                Index through fd. */
+    struct file *current_directory;     /* Current directory - inherited */
     /* end of Zach, Cindy, and Connie driving. */
 
     /* Owned by thread.c. */
