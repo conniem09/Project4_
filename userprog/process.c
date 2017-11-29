@@ -124,6 +124,7 @@ process_wait (tid_t child_tid)
   sema_up (&child->child_exit_sema);
   /* Block until child awakens us and is about to finish dying. */
   sema_down (&cur->parent_wait_sema);
+ 
   return cur->child_exit_status;
 }
 /* end of Zach and Cindy driving. */
@@ -165,6 +166,15 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  if (cur->parent != NULL)
+    {
+      sema_down (&cur->child_exit_sema);
+      cur->parent->child_exit_status = cur->exit_status;
+      list_remove (&cur->child_elem);
+      sema_up (&cur->parent->parent_wait_sema);
+    }
+
 }
 /* end of Zach and Connie driving. */
 

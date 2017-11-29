@@ -118,13 +118,15 @@ struct thread
     struct list children;               /* List of child threads. */
     struct list_elem child_elem;        /* List elem for children list. */
     struct thread *parent;              /* Pointer to the parent thread. */
-    int child_exit_status;              /* Child's exit status. */     
+    int child_exit_status;                    /* Child's exit status. */     
+    int exit_status;                    /* mY exit status */
     struct file *file;                  /* Running executable. */                 
     struct semaphore parent_wait_sema;      /* Semaphore for parent. */
     struct semaphore child_exit_sema;       /* Semaphore for chilld. */  
 
     struct file *open_files[MAX_FD_COUNT];  /* Process's open files. 
                                                Index through fd. */
+    struct file *current_directory;     /* Current directory - inherited */
     /* end of Zach, Cindy, and Connie driving. */
 
     struct hash supp_page_table;          /* Extra info about pages

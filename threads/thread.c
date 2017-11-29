@@ -491,7 +491,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   /* Connie driving now. */
-  t->child_exit_status = -1;
+  t->exit_status = -1;
   list_init (&t->held_locks);
   list_init (&t->children);
   sema_init (&t->child_exit_sema, 0);
