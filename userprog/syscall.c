@@ -151,7 +151,7 @@ exit_handler (int status)
   lock_release (&filesys_lock);
   printf ("%s: exit(%d)\n", cur->name, status);
 
-  cur->exit_status = status;  
+  cur->exit_status = status;
   thread_exit ();
 }
 

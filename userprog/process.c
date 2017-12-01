@@ -120,12 +120,14 @@ process_wait (tid_t child_tid)
   if (!valid_tid)
     return -1;
 
-  /* Allow child to die. */
-  sema_up (&child->child_exit_sema);
   /* Block until child awakens us and is about to finish dying. */
-  sema_down (&cur->parent_wait_sema);
- 
-  return cur->child_exit_status;
+  sema_down (&child->parent_wait_sema);
+  int status = child->exit_status;
+  /* Allow child to die. */
+  list_remove (&child->child_elem);
+  sema_up (&child->child_exit_sema);
+  
+  return status;
 }
 /* end of Zach and Cindy driving. */
 
@@ -169,12 +171,9 @@ process_exit (void)
 
   if (cur->parent != NULL)
     {
+      sema_up (&cur->parent_wait_sema);
       sema_down (&cur->child_exit_sema);
-      cur->parent->child_exit_status = cur->exit_status;
-      list_remove (&cur->child_elem);
-      sema_up (&cur->parent->parent_wait_sema);
     }
-
 }
 /* end of Zach and Connie driving. */
 
